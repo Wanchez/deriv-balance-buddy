@@ -6,6 +6,8 @@ interface BotControlsProps {
   isRunning: boolean;
   totalProfit: number;
   tradeCount: number;
+  botStatus: string;
+  currentDigit: string | null;
   onStart: () => void;
   onStop: () => void;
 }
