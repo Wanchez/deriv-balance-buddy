@@ -150,14 +150,13 @@ export function useDerivWebSocket() {
         if (data.msg_type === "buy") {
           pendingBuyRef.current = false;
           if (data.buy) {
-            // Update the latest trade with contract ID
+            const contractId = String(data.buy.contract_id);
+            // Update the latest pending trade with contract ID
             setTrades((prev) => {
               const updated = [...prev];
-              if (updated[0] && updated[0].result === "pending") {
-                updated[0] = {
-                  ...updated[0],
-                  contractId: data.buy.contract_id,
-                };
+              const pendingIdx = updated.findIndex((t) => t.result === "pending" && !t.contractId);
+              if (pendingIdx !== -1) {
+                updated[pendingIdx] = { ...updated[pendingIdx], contractId };
               }
               return updated;
             });
@@ -169,17 +168,19 @@ export function useDerivWebSocket() {
           if (contract.is_sold) {
             const profit = contract.profit;
             const isWin = profit > 0;
+            const contractId = String(contract.contract_id);
 
             totalProfitRef.current += profit;
             setTotalProfit(totalProfitRef.current);
 
-            // Update trade
+            // Update trade — match by contractId OR first pending trade as fallback
             setTrades((prev) => {
-              const updated = prev.map((t) =>
-                t.contractId === contract.contract_id
-                  ? { ...t, result: isWin ? ("win" as const) : ("loss" as const), profit }
-                  : t
-              );
+              const updated = prev.map((t) => {
+                if (t.contractId === contractId || (!t.contractId && t.result === "pending")) {
+                  return { ...t, contractId, result: isWin ? ("win" as const) : ("loss" as const), profit };
+                }
+                return t;
+              });
               return updated;
             });
 
