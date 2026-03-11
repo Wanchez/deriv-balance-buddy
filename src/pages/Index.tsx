@@ -55,6 +55,8 @@ const Index = () => {
               isRunning={deriv.isRunning}
               totalProfit={deriv.totalProfit}
               tradeCount={deriv.trades.filter((t) => t.result !== "pending").length}
+              botStatus={deriv.botStatus}
+              currentDigit={deriv.currentDigit}
               onStart={deriv.startBot}
               onStop={deriv.stopBot}
             />

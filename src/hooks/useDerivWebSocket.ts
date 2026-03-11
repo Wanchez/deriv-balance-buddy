@@ -9,6 +9,8 @@ export interface TradeLog {
   profit: number;
   timestamp: Date;
   contractId?: string;
+  entryPrice?: string;
+  exitPrice?: string;
 }
 
 export interface StrategyConfig {
@@ -18,7 +20,7 @@ export interface StrategyConfig {
   underPrediction: number;
   takeProfit: number;
   stopLoss: number;
-  entry: number;
+  entryDigits: number[];
 }
 
 const DEFAULT_STRATEGY: StrategyConfig = {
@@ -28,7 +30,7 @@ const DEFAULT_STRATEGY: StrategyConfig = {
   underPrediction: 6,
   takeProfit: 5.97,
   stopLoss: 5.97,
-  entry: 5,
+  entryDigits: [4, 9],
 };
 
 export function useDerivWebSocket() {
@@ -43,16 +45,25 @@ export function useDerivWebSocket() {
   const [trades, setTrades] = useState<TradeLog[]>([]);
   const [totalProfit, setTotalProfit] = useState(0);
   const [strategy, setStrategy] = useState<StrategyConfig>(DEFAULT_STRATEGY);
+  const [currentDigit, setCurrentDigit] = useState<string | null>(null);
+  const [botStatus, setBotStatus] = useState<string>("");
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string>("");
   const runningRef = useRef(false);
-  const stakeRef = useRef(DEFAULT_STRATEGY.initialStake);
-  const lossCounterRef = useRef(0);
   const totalProfitRef = useRef(0);
   const tradeIdRef = useRef(0);
   const strategyRef = useRef(DEFAULT_STRATEGY);
-  const pendingBuyRef = useRef(false);
+
+  // Cycle state (mirrors the JS logic)
+  const currentStakeRef = useRef(DEFAULT_STRATEGY.initialStake);
+  const tradeCountRef = useRef(0);
+  const cycleActiveRef = useRef(false);
+  const scanningForEntryRef = useRef(true);
+  const recoveryActiveRef = useRef(false);
+  const contractTypeRef = useRef<"DIGITOVER" | "DIGITUNDER">("DIGITOVER");
+  const barrierRef = useRef(1);
+  const cycleTradesRef = useRef<{ contractType: string; stake: number; entry: string }[]>([]);
 
   const sendMessage = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -64,44 +75,77 @@ export function useDerivWebSocket() {
     setTrades((prev) => [trade, ...prev].slice(0, 100));
   }, []);
 
-  const placeTrade = useCallback(() => {
-    if (!runningRef.current || pendingBuyRef.current) return;
+  const updateTradeResult = useCallback((contractId: string, result: "win" | "loss", profit: number, exitPrice: string) => {
+    setTrades((prev) =>
+      prev.map((t) =>
+        t.contractId === contractId
+          ? { ...t, result, profit, exitPrice }
+          : t
+      )
+    );
+  }, []);
 
+  // Execute a trade (mirrors executeTrade from JS)
+  const executeTrade = useCallback((entryPrice: string) => {
+    if (!runningRef.current) return;
     const s = strategyRef.current;
-    const isOver = lossCounterRef.current === 0;
-    const contractType = isOver ? "DIGITOVER" : "DIGITUNDER";
-    const prediction = isOver ? s.overPrediction : s.underPrediction;
+    const cType = contractTypeRef.current;
+    const barrier = barrierRef.current;
+    const stake = currentStakeRef.current;
 
-    pendingBuyRef.current = true;
-
-    sendMessage({
-      buy: 1,
-      subscribe: 1,
-      price: stakeRef.current,
-      parameters: {
-        contract_type: contractType,
-        symbol: "1HZ10V",
-        duration: 1,
-        duration_unit: "t",
-        basis: "stake",
-        amount: stakeRef.current,
-        prediction: prediction,
-        currency: "USD",
-      },
+    cycleTradesRef.current.push({
+      contractType: cType,
+      stake,
+      entry: entryPrice,
     });
 
+    setBotStatus(`${cType} | Stake ${stake.toFixed(2)}`);
+
+    // Add trade to UI as pending
     tradeIdRef.current += 1;
     const trade: TradeLog = {
       id: tradeIdRef.current,
-      type: isOver ? "DIGITOVER" : "DIGITUNDER",
-      prediction,
-      stake: stakeRef.current,
+      type: cType,
+      prediction: barrier,
+      stake,
       result: "pending",
       profit: 0,
       timestamp: new Date(),
+      entryPrice,
     };
     addTrade(trade);
+
+    // Send buy request — NO subscribe here; we subscribe explicitly on buy response
+    sendMessage({
+      buy: 1,
+      price: stake,
+      parameters: {
+        amount: stake,
+        basis: "stake",
+        contract_type: cType,
+        currency: "USD",
+        duration: 1,
+        duration_unit: "t",
+        symbol: "1HZ10V",
+        barrier: barrier,
+      },
+    });
+
+    if (!recoveryActiveRef.current) {
+      tradeCountRef.current += 1;
+    }
   }, [sendMessage, addTrade]);
+
+  // Reset cycle (mirrors resetCycle from JS)
+  const resetCycle = useCallback(() => {
+    tradeCountRef.current = 0;
+    cycleTradesRef.current = [];
+    scanningForEntryRef.current = true;
+    cycleActiveRef.current = false;
+    recoveryActiveRef.current = false;
+    currentStakeRef.current = strategyRef.current.initialStake;
+    setBotStatus("Scanning for entry...");
+  }, []);
 
   const connect = useCallback(
     (token: string) => {
@@ -131,85 +175,130 @@ export function useDerivWebSocket() {
           return;
         }
 
-        if (data.msg_type === "authorize") {
-          setIsConnected(true);
-          setIsConnecting(false);
-          setBalance(data.authorize.balance);
-          setCurrency(data.authorize.currency);
-          setAccountName(data.authorize.fullname);
-          setLoginId(data.authorize.loginid);
+        switch (data.msg_type) {
+          case "authorize":
+            setIsConnected(true);
+            setIsConnecting(false);
+            setBalance(data.authorize.balance);
+            setCurrency(data.authorize.currency);
+            setAccountName(data.authorize.fullname);
+            setLoginId(data.authorize.loginid);
+            sendMessage({ balance: 1, subscribe: 1 });
+            break;
 
-          // Subscribe to balance updates
-          sendMessage({ balance: 1, subscribe: 1 });
-        }
+          case "balance":
+            setBalance(data.balance.balance);
+            break;
 
-        if (data.msg_type === "balance") {
-          setBalance(data.balance.balance);
-        }
+          case "tick": {
+            // Handle tick — entry scanning logic from JS
+            if (!runningRef.current || !scanningForEntryRef.current || cycleActiveRef.current) break;
 
-        if (data.msg_type === "buy") {
-          pendingBuyRef.current = false;
-          if (data.buy) {
-            const contractId = String(data.buy.contract_id);
-            // Update the latest pending trade with contract ID
-            setTrades((prev) => {
-              const updated = [...prev];
-              const pendingIdx = updated.findIndex((t) => t.result === "pending" && !t.contractId);
-              if (pendingIdx !== -1) {
-                updated[pendingIdx] = { ...updated[pendingIdx], contractId };
-              }
-              return updated;
-            });
+            const tick = data.tick;
+            const quoteStr = tick.quote.toString();
+            const lastDigit = parseInt(quoteStr.slice(-1), 10);
+            setCurrentDigit(quoteStr);
+
+            const s = strategyRef.current;
+            if (s.entryDigits.includes(lastDigit)) {
+              // Start 3-trade cycle
+              scanningForEntryRef.current = false;
+              cycleActiveRef.current = true;
+              contractTypeRef.current = "DIGITOVER";
+              barrierRef.current = s.overPrediction;
+              executeTrade(quoteStr);
+            }
+            break;
           }
-        }
 
-        if (data.msg_type === "proposal_open_contract") {
-          const contract = data.proposal_open_contract;
-          if (contract.is_sold) {
-            const profit = contract.profit;
+          case "buy": {
+            // KEY FIX: Explicitly subscribe to contract updates using contract_id
+            // This is the mechanism from the JS that prevents pending trades
+            if (data.buy) {
+              const contractId = String(data.buy.contract_id);
+              // Update the pending trade with the contract ID
+              setTrades((prev) => {
+                const updated = [...prev];
+                const pendingIdx = updated.findIndex((t) => t.result === "pending" && !t.contractId);
+                if (pendingIdx !== -1) {
+                  updated[pendingIdx] = { ...updated[pendingIdx], contractId };
+                }
+                return updated;
+              });
+              // Explicitly subscribe to this contract's open state
+              sendMessage({
+                proposal_open_contract: 1,
+                contract_id: data.buy.contract_id,
+                subscribe: 1,
+              });
+            }
+            break;
+          }
+
+          case "proposal_open_contract": {
+            const contract = data.proposal_open_contract;
+            if (!contract || !contract.is_sold) break;
+
+            const profit = parseFloat(contract.profit);
             const isWin = profit > 0;
             const contractId = String(contract.contract_id);
+            const exitPrice = String(contract.sell_price || contract.bid_price || 0);
 
+            // Get last cycle trade info
+            const tradeInfo = cycleTradesRef.current[cycleTradesRef.current.length - 1];
+
+            // Update trade in UI
+            updateTradeResult(contractId, isWin ? "win" : "loss", profit, exitPrice);
+
+            // Update total P&L
             totalProfitRef.current += profit;
             setTotalProfit(totalProfitRef.current);
 
-            // Update trade — match by contractId OR first pending trade as fallback
-            setTrades((prev) => {
-              const updated = prev.map((t) => {
-                if (t.contractId === contractId || (!t.contractId && t.result === "pending")) {
-                  return { ...t, contractId, result: isWin ? ("win" as const) : ("loss" as const), profit };
-                }
-                return t;
-              });
-              return updated;
-            });
-
             const s = strategyRef.current;
-
-            if (isWin) {
-              lossCounterRef.current = 0;
-              stakeRef.current = s.initialStake;
-            } else {
-              stakeRef.current = stakeRef.current * s.martingale;
-              lossCounterRef.current += 1;
-            }
 
             // Check stop conditions
             if (totalProfitRef.current >= s.takeProfit) {
               runningRef.current = false;
               setIsRunning(false);
+              setBotStatus("Take profit reached!");
               return;
             }
             if (totalProfitRef.current <= -s.stopLoss) {
               runningRef.current = false;
               setIsRunning(false);
+              setBotStatus("Stop loss reached!");
               return;
             }
 
-            // Place next trade
-            if (runningRef.current) {
-              setTimeout(() => placeTrade(), 500);
+            if (!runningRef.current) break;
+
+            const entryPrice = tradeInfo?.entry || "";
+
+            // Recovery/continuation logic from JS
+            if (profit < 0) {
+              // Loss → recovery trade with martingale on DIGITUNDER
+              currentStakeRef.current = (tradeInfo?.stake || currentStakeRef.current) * s.martingale;
+              contractTypeRef.current = "DIGITUNDER";
+              barrierRef.current = s.underPrediction;
+              recoveryActiveRef.current = true;
+              setBotStatus("Recovery trade...");
+              setTimeout(() => executeTrade(entryPrice), 500);
+            } else {
+              // Win
+              recoveryActiveRef.current = false;
+
+              if (tradeCountRef.current < 3) {
+                // Continue cycle with DIGITOVER
+                currentStakeRef.current = s.initialStake;
+                contractTypeRef.current = "DIGITOVER";
+                barrierRef.current = s.overPrediction;
+                setTimeout(() => executeTrade(entryPrice), 500);
+              } else {
+                // Cycle complete → reset and scan for next entry
+                resetCycle();
+              }
             }
+            break;
           }
         }
       };
@@ -225,7 +314,7 @@ export function useDerivWebSocket() {
         runningRef.current = false;
       };
     },
-    [sendMessage, placeTrade]
+    [sendMessage, executeTrade, updateTradeResult, resetCycle]
   );
 
   const disconnect = useCallback(() => {
@@ -244,21 +333,30 @@ export function useDerivWebSocket() {
     setIsRunning(true);
     totalProfitRef.current = 0;
     setTotalProfit(0);
-    lossCounterRef.current = 0;
-    stakeRef.current = strategyRef.current.initialStake;
-    pendingBuyRef.current = false;
-    placeTrade();
-  }, [isConnected, placeTrade]);
+    tradeCountRef.current = 0;
+    cycleTradesRef.current = [];
+    scanningForEntryRef.current = true;
+    cycleActiveRef.current = false;
+    recoveryActiveRef.current = false;
+    currentStakeRef.current = strategyRef.current.initialStake;
+    contractTypeRef.current = "DIGITOVER";
+    barrierRef.current = strategyRef.current.overPrediction;
+    setBotStatus("Scanning for entry...");
+
+    // Subscribe to ticks for entry scanning
+    sendMessage({ ticks: "1HZ10V", subscribe: 1 });
+  }, [isConnected, sendMessage]);
 
   const stopBot = useCallback(() => {
     runningRef.current = false;
     setIsRunning(false);
+    setBotStatus("Stopped");
   }, []);
 
   const updateStrategy = useCallback((newStrategy: StrategyConfig) => {
     setStrategy(newStrategy);
     strategyRef.current = newStrategy;
-    stakeRef.current = newStrategy.initialStake;
+    currentStakeRef.current = newStrategy.initialStake;
   }, []);
 
   return {
@@ -273,6 +371,8 @@ export function useDerivWebSocket() {
     trades,
     totalProfit,
     strategy,
+    currentDigit,
+    botStatus,
     connect,
     disconnect,
     startBot,

@@ -6,6 +6,8 @@ interface BotControlsProps {
   isRunning: boolean;
   totalProfit: number;
   tradeCount: number;
+  botStatus: string;
+  currentDigit: string | null;
   onStart: () => void;
   onStop: () => void;
 }
@@ -15,6 +17,8 @@ export function BotControls({
   isRunning,
   totalProfit,
   tradeCount,
+  botStatus,
+  currentDigit,
   onStart,
   onStop,
 }: BotControlsProps) {
@@ -65,9 +69,16 @@ export function BotControls({
       </div>
 
       {isRunning && (
-        <div className="flex items-center gap-2 text-sm text-primary">
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          Bot is running...
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-primary">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            {botStatus || "Bot is running..."}
+          </div>
+          {currentDigit && (
+            <div className="text-xs text-muted-foreground font-mono">
+              Last tick: {currentDigit}
+            </div>
+          )}
         </div>
       )}
     </div>
