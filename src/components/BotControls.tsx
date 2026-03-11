@@ -17,6 +17,8 @@ export function BotControls({
   isRunning,
   totalProfit,
   tradeCount,
+  botStatus,
+  currentDigit,
   onStart,
   onStop,
 }: BotControlsProps) {
