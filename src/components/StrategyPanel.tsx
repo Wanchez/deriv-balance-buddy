@@ -52,31 +52,10 @@ export function StrategyPanel({ strategy, onUpdate, disabled }: StrategyPanelPro
   return (
     <div className="rounded-lg border border-border bg-card p-5 space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="font-display text-lg font-semibold">Strategy Config</h2>
-      </div>
-
-      {/* Bot Selector */}
-      <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Bot Strategy</Label>
-        <Select
-          value={strategy.botType}
-          onValueChange={(v) => handleBotChange(v as BotType)}
-          disabled={disabled}
-        >
-          <SelectTrigger className="bg-muted text-sm h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BOT_DEFINITIONS.map((bot) => (
-              <SelectItem key={bot.id} value={bot.id}>
-                {bot.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground leading-tight">
-          {currentBot.description}
-        </p>
+        <h2 className="font-display text-lg font-semibold">Settings</h2>
+        <span className="text-[10px] uppercase tracking-widest bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
+          {currentBot.name}
+        </span>
       </div>
 
       {/* Symbol Selector */}
