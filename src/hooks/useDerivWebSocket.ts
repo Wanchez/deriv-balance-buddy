@@ -409,6 +409,9 @@ export function useDerivWebSocket() {
             if (!runningRef.current) break;
 
             const tick = data.tick;
+            // Only process ticks from the selected symbol
+            if (tick.symbol && tick.symbol !== strategyRef.current.symbol) break;
+
             const quoteStr = tick.quote.toString();
             const lastDigit = parseInt(quoteStr.slice(-1), 10);
             setCurrentDigit(quoteStr);
