@@ -409,6 +409,9 @@ export function useDerivWebSocket() {
             if (!runningRef.current) break;
 
             const tick = data.tick;
+            // Only process ticks from the selected symbol
+            if (tick.symbol && tick.symbol !== strategyRef.current.symbol) break;
+
             const quoteStr = tick.quote.toString();
             const lastDigit = parseInt(quoteStr.slice(-1), 10);
             setCurrentDigit(quoteStr);
@@ -559,6 +562,9 @@ export function useDerivWebSocket() {
     barrierRef.current = strategyRef.current.overPrediction;
     setBotStatus("Scanning for entry...");
 
+    // Unsubscribe from all previous tick streams first
+    sendMessage({ forget_all: "ticks" });
+    // Subscribe only to the selected symbol
     sendMessage({ ticks: strategyRef.current.symbol, subscribe: 1 });
   }, [isConnected, sendMessage]);
 
