@@ -562,6 +562,9 @@ export function useDerivWebSocket() {
     barrierRef.current = strategyRef.current.overPrediction;
     setBotStatus("Scanning for entry...");
 
+    // Unsubscribe from all previous tick streams first
+    sendMessage({ forget_all: "ticks" });
+    // Subscribe only to the selected symbol
     sendMessage({ ticks: strategyRef.current.symbol, subscribe: 1 });
   }, [isConnected, sendMessage]);
 
