@@ -54,6 +54,7 @@ export function useDerivWebSocket() {
   const [strategy, setStrategy] = useState<StrategyConfig>(DEFAULT_STRATEGY);
   const [currentDigit, setCurrentDigit] = useState<string | null>(null);
   const [botStatus, setBotStatus] = useState<string>("");
+  const [digitHistory, setDigitHistory] = useState<number[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string>("");
