@@ -46,6 +46,8 @@ export function StrategyPanel({ strategy, onUpdate, disabled }: StrategyPanelPro
   };
 
   const currentBot = getBotDefinition(strategy.botType);
+  const isEvenOdd = currentBot.tradeType === "evenodd";
+  const isOverUnder = currentBot.tradeType === "overunder";
   const showEntryDigits = strategy.botType === "over_under_cycle";
   const showConsecutiveCount = strategy.botType === "even_odd_reversal";
 
@@ -55,6 +57,17 @@ export function StrategyPanel({ strategy, onUpdate, disabled }: StrategyPanelPro
         <h2 className="font-display text-lg font-semibold">Settings</h2>
         <span className="text-[10px] uppercase tracking-widest bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
           {currentBot.name}
+        </span>
+      </div>
+
+      {/* Market type indicator */}
+      <div className="flex items-center gap-2">
+        <span className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium ${
+          isEvenOdd
+            ? "bg-primary/15 text-primary border border-primary/30"
+            : "bg-accent/15 text-accent border border-accent/30"
+        }`}>
+          {isEvenOdd ? "Even / Odd" : "Over / Under"}
         </span>
       </div>
 
@@ -103,28 +116,39 @@ export function StrategyPanel({ strategy, onUpdate, disabled }: StrategyPanelPro
             step={0.1}
           />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Over Prediction</Label>
-          <Input
-            type="number"
-            value={strategy.overPrediction}
-            onChange={(e) => update("overPrediction", e.target.value)}
-            disabled={disabled}
-            className="bg-muted font-mono text-sm h-9"
-            step={1}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Under Prediction</Label>
-          <Input
-            type="number"
-            value={strategy.underPrediction}
-            onChange={(e) => update("underPrediction", e.target.value)}
-            disabled={disabled}
-            className="bg-muted font-mono text-sm h-9"
-            step={1}
-          />
-        </div>
+
+        {/* Over/Under prediction fields - only for overunder bots */}
+        {isOverUnder && (
+          <>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Over Prediction</Label>
+              <Input
+                type="number"
+                value={strategy.overPrediction}
+                onChange={(e) => update("overPrediction", e.target.value)}
+                disabled={disabled}
+                className="bg-muted font-mono text-sm h-9"
+                min={0}
+                max={9}
+                step={1}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Under Prediction</Label>
+              <Input
+                type="number"
+                value={strategy.underPrediction}
+                onChange={(e) => update("underPrediction", e.target.value)}
+                disabled={disabled}
+                className="bg-muted font-mono text-sm h-9"
+                min={0}
+                max={9}
+                step={1}
+              />
+            </div>
+          </>
+        )}
+
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Take Profit</Label>
           <Input
@@ -181,9 +205,10 @@ export function StrategyPanel({ strategy, onUpdate, disabled }: StrategyPanelPro
 
       <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-md p-2.5 space-y-1">
         <p>• Market: {VOLATILITY_SYMBOLS.find((s) => s.value === strategy.symbol)?.label || strategy.symbol}</p>
+        <p>• Type: {isEvenOdd ? "Even / Odd" : "Over / Under"}</p>
         <p>• Strategy: {currentBot.name}</p>
         {showEntryDigits && <p>• Entry digits: {strategy.entryDigits.join(", ")}</p>}
-        {showConsecutiveCount && <p>• Checks last {strategy.consecutiveCount} digits for even/odd pattern</p>}
+        {showConsecutiveCount && <p>• Checks last {strategy.consecutiveCount} digits for pattern</p>}
       </div>
     </div>
   );
