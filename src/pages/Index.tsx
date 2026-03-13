@@ -1,9 +1,11 @@
+import { useState, useCallback } from "react";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { StrategyPanel } from "@/components/StrategyPanel";
 import { BotControls } from "@/components/BotControls";
 import { TradeLogPanel } from "@/components/TradeLog";
 import { DCircles } from "@/components/DCircles";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
+import { useDCirclesStream } from "@/hooks/useDCirclesStream";
 import { BOT_DEFINITIONS } from "@/lib/botStrategies";
 import { Bot } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,9 +13,27 @@ import type { BotType } from "@/lib/botStrategies";
 
 const Index = () => {
   const deriv = useDerivWebSocket();
+  const [apiToken, setApiToken] = useState<string | null>(null);
+  const dCircles = useDCirclesStream(apiToken);
+
+  const handleConnect = useCallback((token: string) => {
+    setApiToken(token);
+    deriv.connect(token);
+  }, [deriv.connect]);
+
+  const handleDisconnect = useCallback(() => {
+    deriv.disconnect();
+    // Keep DCircles streaming - it's independent
+  }, [deriv.disconnect]);
+
+  const handleTokenLoaded = useCallback((token: string) => {
+    setApiToken(token);
+    // Auto-connect with saved token
+    deriv.connect(token);
+  }, [deriv.connect]);
 
   const handleTabChange = (botType: string) => {
-    if (deriv.isRunning) return; // Don't switch while running
+    if (deriv.isRunning) return;
     const def = BOT_DEFINITIONS.find((b) => b.id === botType);
     if (!def) return;
     deriv.updateStrategy({
@@ -49,9 +69,8 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main */}
       <main className="container max-w-6xl mx-auto px-4 py-6 space-y-5">
-        {/* Connection - always visible */}
+        {/* Connection */}
         <ConnectionPanel
           isConnected={deriv.isConnected}
           isConnecting={deriv.isConnecting}
@@ -60,8 +79,19 @@ const Index = () => {
           accountName={deriv.accountName}
           loginId={deriv.loginId}
           error={deriv.error}
-          onConnect={deriv.connect}
-          onDisconnect={deriv.disconnect}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
+          onTokenLoaded={handleTokenLoaded}
+        />
+
+        {/* D-Circles - Independent analysis tool, always visible when connected */}
+        <DCircles
+          digitHistory={dCircles.digitHistory}
+          lastDigit={dCircles.lastDigit}
+          currentQuote={dCircles.currentQuote}
+          isStreaming={dCircles.isStreaming}
+          symbol={dCircles.symbol}
+          onSymbolChange={dCircles.changeSymbol}
         />
 
         {/* Bot Tabs */}
@@ -85,7 +115,6 @@ const Index = () => {
           {BOT_DEFINITIONS.map((bot) => (
             <TabsContent key={bot.id} value={bot.id} className="mt-4">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                {/* Left column - Strategy config */}
                 <div className="lg:col-span-4 space-y-5">
                   <div className="rounded-lg border border-border bg-card p-4">
                     <p className="text-xs text-muted-foreground leading-relaxed">
@@ -99,7 +128,6 @@ const Index = () => {
                   />
                 </div>
 
-                {/* Right column - Controls & Trades */}
                 <div className="lg:col-span-8 space-y-5">
                   <BotControls
                     isConnected={deriv.isConnected}
@@ -110,10 +138,6 @@ const Index = () => {
                     currentDigit={deriv.currentDigit}
                     onStart={deriv.startBot}
                     onStop={deriv.stopBot}
-                  />
-                  <DCircles
-                    digitHistory={deriv.digitHistory}
-                    lastDigit={deriv.currentDigit ? parseInt(deriv.currentDigit.slice(-1), 10) : null}
                   />
                   <TradeLogPanel trades={deriv.trades} />
                 </div>

@@ -1,11 +1,30 @@
 import { useMemo } from "react";
+import { VOLATILITY_SYMBOLS } from "@/lib/botStrategies";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DCirclesProps {
   digitHistory: number[];
   lastDigit: number | null;
+  currentQuote: string | null;
+  isStreaming: boolean;
+  symbol: string;
+  onSymbolChange: (symbol: string) => void;
 }
 
-export function DCircles({ digitHistory, lastDigit }: DCirclesProps) {
+export function DCircles({
+  digitHistory,
+  lastDigit,
+  currentQuote,
+  isStreaming,
+  symbol,
+  onSymbolChange,
+}: DCirclesProps) {
   const stats = useMemo(() => {
     const total = digitHistory.length;
     const counts = Array(10).fill(0);
@@ -21,13 +40,43 @@ export function DCircles({ digitHistory, lastDigit }: DCirclesProps) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold font-display">D-Circles</h3>
-        <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
-          {digitHistory.length} ticks
-        </span>
+      {/* Header with symbol selector */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold font-display">D-Circles</h3>
+          {isStreaming && (
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
+            {digitHistory.length} ticks
+          </span>
+          <Select value={symbol} onValueChange={onSymbolChange}>
+            <SelectTrigger className="w-[140px] h-7 text-xs bg-muted">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VOLATILITY_SYMBOLS.map((s) => (
+                <SelectItem key={s.value} value={s.value} className="text-xs">
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
+      {/* Current price */}
+      {currentQuote && (
+        <div className="text-center">
+          <span className="font-mono text-lg font-bold text-foreground">
+            {currentQuote}
+          </span>
+        </div>
+      )}
+
+      {/* Digit circles */}
       <div className="grid grid-cols-5 gap-2">
         {stats.map(({ digit, count, percentage }) => {
           const intensity = maxPercentage > 0 ? percentage / maxPercentage : 0;
@@ -59,7 +108,6 @@ export function DCircles({ digitHistory, lastDigit }: DCirclesProps) {
                 }}
               >
                 {digit}
-                {/* Intensity ring */}
                 <svg
                   className="absolute inset-0 w-full h-full -rotate-90"
                   viewBox="0 0 40 40"
@@ -87,50 +135,33 @@ export function DCircles({ digitHistory, lastDigit }: DCirclesProps) {
         })}
       </div>
 
-      {/* Even/Odd summary */}
+      {/* Even/Odd/Over/Under summary */}
       {digitHistory.length > 0 && (
-        <div className="flex gap-2 pt-1">
-          <div className="flex-1 rounded bg-muted px-2 py-1.5 text-center">
-            <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Even</p>
-            <p className="text-xs font-bold font-display text-foreground">
-              {(
-                (stats.filter((s) => s.digit % 2 === 0).reduce((a, b) => a + b.count, 0) /
-                  digitHistory.length) *
-                100
-              ).toFixed(1)}%
-            </p>
-          </div>
-          <div className="flex-1 rounded bg-muted px-2 py-1.5 text-center">
-            <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Odd</p>
-            <p className="text-xs font-bold font-display text-foreground">
-              {(
-                (stats.filter((s) => s.digit % 2 !== 0).reduce((a, b) => a + b.count, 0) /
-                  digitHistory.length) *
-                100
-              ).toFixed(1)}%
-            </p>
-          </div>
-          <div className="flex-1 rounded bg-muted px-2 py-1.5 text-center">
-            <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Over 4</p>
-            <p className="text-xs font-bold font-display text-foreground">
-              {(
-                (stats.filter((s) => s.digit > 4).reduce((a, b) => a + b.count, 0) /
-                  digitHistory.length) *
-                100
-              ).toFixed(1)}%
-            </p>
-          </div>
-          <div className="flex-1 rounded bg-muted px-2 py-1.5 text-center">
-            <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Under 5</p>
-            <p className="text-xs font-bold font-display text-foreground">
-              {(
-                (stats.filter((s) => s.digit < 5).reduce((a, b) => a + b.count, 0) /
-                  digitHistory.length) *
-                100
-              ).toFixed(1)}%
-            </p>
-          </div>
+        <div className="grid grid-cols-4 gap-2 pt-1">
+          {[
+            { label: "Even", filter: (d: number) => d % 2 === 0 },
+            { label: "Odd", filter: (d: number) => d % 2 !== 0 },
+            { label: "Over 4", filter: (d: number) => d > 4 },
+            { label: "Under 5", filter: (d: number) => d < 5 },
+          ].map(({ label, filter }) => (
+            <div key={label} className="rounded bg-muted px-2 py-1.5 text-center">
+              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</p>
+              <p className="text-xs font-bold font-display text-foreground">
+                {(
+                  (stats.filter((s) => filter(s.digit)).reduce((a, b) => a + b.count, 0) /
+                    digitHistory.length) *
+                  100
+                ).toFixed(1)}%
+              </p>
+            </div>
+          ))}
         </div>
+      )}
+
+      {!isStreaming && digitHistory.length === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-2">
+          Connect to start live digit analysis
+        </p>
       )}
     </div>
   );
