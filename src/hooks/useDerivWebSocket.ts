@@ -54,6 +54,7 @@ export function useDerivWebSocket() {
   const [strategy, setStrategy] = useState<StrategyConfig>(DEFAULT_STRATEGY);
   const [currentDigit, setCurrentDigit] = useState<string | null>(null);
   const [botStatus, setBotStatus] = useState<string>("");
+  const [digitHistory, setDigitHistory] = useState<number[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string>("");
@@ -415,6 +416,7 @@ export function useDerivWebSocket() {
             const quoteStr = tick.quote.toString();
             const lastDigit = parseInt(quoteStr.slice(-1), 10);
             setCurrentDigit(quoteStr);
+            setDigitHistory((prev) => [...prev, lastDigit].slice(-200));
 
             const botType = strategyRef.current.botType;
 
@@ -554,6 +556,7 @@ export function useDerivWebSocket() {
     tradeCountRef.current = 0;
     cycleTradesRef.current = [];
     digitHistoryRef.current = [];
+    setDigitHistory([]);
     scanningForEntryRef.current = true;
     cycleActiveRef.current = false;
     recoveryActiveRef.current = false;
@@ -593,6 +596,7 @@ export function useDerivWebSocket() {
     totalProfit,
     strategy,
     currentDigit,
+    digitHistory,
     botStatus,
     connect,
     disconnect,
