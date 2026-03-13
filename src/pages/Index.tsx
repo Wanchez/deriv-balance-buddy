@@ -2,6 +2,7 @@ import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { StrategyPanel } from "@/components/StrategyPanel";
 import { BotControls } from "@/components/BotControls";
 import { TradeLogPanel } from "@/components/TradeLog";
+import { DCircles } from "@/components/DCircles";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { BOT_DEFINITIONS } from "@/lib/botStrategies";
 import { Bot } from "lucide-react";
