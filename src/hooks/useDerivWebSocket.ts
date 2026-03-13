@@ -596,6 +596,7 @@ export function useDerivWebSocket() {
     totalProfit,
     strategy,
     currentDigit,
+    digitHistory,
     botStatus,
     connect,
     disconnect,
