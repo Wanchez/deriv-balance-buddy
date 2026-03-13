@@ -416,6 +416,7 @@ export function useDerivWebSocket() {
             const quoteStr = tick.quote.toString();
             const lastDigit = parseInt(quoteStr.slice(-1), 10);
             setCurrentDigit(quoteStr);
+            setDigitHistory((prev) => [...prev, lastDigit].slice(-200));
 
             const botType = strategyRef.current.botType;
 
