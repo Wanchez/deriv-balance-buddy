@@ -111,6 +111,10 @@ const Index = () => {
                     onStart={deriv.startBot}
                     onStop={deriv.stopBot}
                   />
+                  <DCircles
+                    digitHistory={deriv.digitHistory}
+                    lastDigit={deriv.currentDigit ? parseInt(deriv.currentDigit.slice(-1), 10) : null}
+                  />
                   <TradeLogPanel trades={deriv.trades} />
                 </div>
               </div>
