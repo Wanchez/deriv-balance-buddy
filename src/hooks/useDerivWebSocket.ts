@@ -556,6 +556,7 @@ export function useDerivWebSocket() {
     tradeCountRef.current = 0;
     cycleTradesRef.current = [];
     digitHistoryRef.current = [];
+    setDigitHistory([]);
     scanningForEntryRef.current = true;
     cycleActiveRef.current = false;
     recoveryActiveRef.current = false;
