@@ -4,8 +4,10 @@ import { StrategyPanel } from "@/components/StrategyPanel";
 import { BotControls } from "@/components/BotControls";
 import { TradeLogPanel } from "@/components/TradeLog";
 import { DCircles } from "@/components/DCircles";
+import { MarketScanner } from "@/components/MarketScanner";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { useDCirclesStream } from "@/hooks/useDCirclesStream";
+import { useMarketScanner } from "@/hooks/useMarketScanner";
 import { BOT_DEFINITIONS } from "@/lib/botStrategies";
 import { Bot } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +17,7 @@ const Index = () => {
   const deriv = useDerivWebSocket();
   const [apiToken, setApiToken] = useState<string | null>(null);
   const dCircles = useDCirclesStream(apiToken);
+  const scanner = useMarketScanner(apiToken);
 
   const handleConnect = useCallback((token: string) => {
     setApiToken(token);
@@ -82,6 +85,15 @@ const Index = () => {
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
           onTokenLoaded={handleTokenLoaded}
+        />
+
+        {/* Market Scanner - Cold digit alerts */}
+        <MarketScanner
+          alerts={scanner.alerts}
+          scanning={scanner.scanning}
+          scannedCount={scanner.scannedCount}
+          totalSymbols={scanner.totalSymbols}
+          onRescan={scanner.rescan}
         />
 
         {/* D-Circles - Independent analysis tool, always visible when connected */}
