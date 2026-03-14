@@ -17,6 +17,7 @@ const Index = () => {
   const deriv = useDerivWebSocket();
   const [apiToken, setApiToken] = useState<string | null>(null);
   const dCircles = useDCirclesStream(apiToken);
+  const scanner = useMarketScanner(apiToken);
 
   const handleConnect = useCallback((token: string) => {
     setApiToken(token);
