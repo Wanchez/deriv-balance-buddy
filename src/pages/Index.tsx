@@ -90,8 +90,11 @@ const Index = () => {
           lastDigit={dCircles.lastDigit}
           currentQuote={dCircles.currentQuote}
           isStreaming={dCircles.isStreaming}
+          isLoadingHistory={dCircles.isLoadingHistory}
           symbol={dCircles.symbol}
+          historyCount={dCircles.historyCount}
           onSymbolChange={dCircles.changeSymbol}
+          onHistoryCountChange={dCircles.changeHistoryCount}
         />
 
         {/* Bot Tabs */}
