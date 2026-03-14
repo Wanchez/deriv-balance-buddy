@@ -26,10 +26,11 @@ export function useDCirclesStream(apiToken: string | null) {
     setIsStreaming(false);
   }, []);
 
-  /** Extract last digit from a quote string, preserving trailing zeros */
-  const extractDigit = (quote: number, quoteStr?: string): number => {
-    // Use the string representation to preserve trailing zeros
-    const str = quoteStr || quote.toString();
+  const pipSizeRef = useRef(pipSize);
+
+  /** Extract last digit from a quote, using toFixed to preserve trailing zeros */
+  const extractDigit = (quote: number, decimals: number): number => {
+    const str = quote.toFixed(decimals);
     return parseInt(str.slice(-1), 10);
   };
 
