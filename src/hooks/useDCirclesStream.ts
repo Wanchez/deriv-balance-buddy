@@ -8,6 +8,7 @@ export function useDCirclesStream(apiToken: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [historyCount, setHistoryCount] = useState(1000);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [pipSize, setPipSize] = useState(2); // decimal places for this symbol
 
   const wsRef = useRef<WebSocket | null>(null);
   const symbolRef = useRef(symbol);
@@ -23,10 +24,11 @@ export function useDCirclesStream(apiToken: string | null) {
     setIsStreaming(false);
   }, []);
 
-  /** Extract last digit from a quote string, preserving trailing zeros */
-  const extractDigit = (quote: number, quoteStr?: string): number => {
-    // Use the string representation to preserve trailing zeros
-    const str = quoteStr || quote.toString();
+  const pipSizeRef = useRef(pipSize);
+
+  /** Extract last digit from a quote, using toFixed to preserve trailing zeros */
+  const extractDigit = (quote: number, decimals: number): number => {
+    const str = quote.toFixed(decimals);
     return parseInt(str.slice(-1), 10);
   };
 
@@ -63,17 +65,42 @@ export function useDCirclesStream(apiToken: string | null) {
         fetchHistory(ws, symbolRef.current, historyCountRef.current);
       }
 
+      // Detect pip_size from active_symbols or tick data
+      if (data.msg_type === "tick" && data.tick) {
+        const tick = data.tick;
+        if (tick.symbol !== symbolRef.current) return;
+        // Derive pip size from the quote string provided by the API
+        const apiQuoteStr = String(tick.quote);
+        const dotIdx = apiQuoteStr.indexOf(".");
+        if (dotIdx !== -1) {
+          const detected = apiQuoteStr.length - dotIdx - 1;
+          if (detected > pipSizeRef.current) {
+            pipSizeRef.current = detected;
+            setPipSize(detected);
+          }
+        }
+        const digit = extractDigit(tick.quote, pipSizeRef.current);
+        const formatted = tick.quote.toFixed(pipSizeRef.current);
+        setCurrentQuote(formatted);
+        setLastDigit(digit);
+        setDigitHistory((prev) => [...prev, digit].slice(-historyCountRef.current));
+      }
+
       if (data.msg_type === "history" && data.history) {
         const prices: number[] = data.history.prices;
-        // Deriv returns prices as numbers; convert to string to get trailing zeros
-        // Unfortunately ticks_history doesn't give formatted strings, so we use
-        // a fixed-precision approach based on the symbol's pip size
-        const digits = prices.map((p) => {
-          // Convert to string with enough decimals to capture last digit
-          // Deriv volatility indices typically have 2-4 decimal places
-          const str = p.toString();
-          return parseInt(str.slice(-1), 10);
-        });
+        // Detect pip size from the first price that has decimals
+        for (const p of prices) {
+          const s = p.toString();
+          const dot = s.indexOf(".");
+          if (dot !== -1) {
+            const dec = s.length - dot - 1;
+            if (dec > pipSizeRef.current) {
+              pipSizeRef.current = dec;
+              setPipSize(dec);
+            }
+          }
+        }
+        const digits = prices.map((p) => extractDigit(p, pipSizeRef.current));
         setDigitHistory(digits);
         if (digits.length > 0) {
           setLastDigit(digits[digits.length - 1]);
@@ -82,16 +109,6 @@ export function useDCirclesStream(apiToken: string | null) {
         // Now subscribe to live ticks
         ws.send(JSON.stringify({ ticks: symbolRef.current, subscribe: 1 }));
         setIsStreaming(true);
-      }
-
-      if (data.msg_type === "tick" && data.tick) {
-        const tick = data.tick;
-        if (tick.symbol !== symbolRef.current) return;
-        const quoteStr = tick.quote.toString();
-        const digit = extractDigit(tick.quote, quoteStr);
-        setCurrentQuote(quoteStr);
-        setLastDigit(digit);
-        setDigitHistory((prev) => [...prev, digit].slice(-historyCountRef.current));
       }
     };
 

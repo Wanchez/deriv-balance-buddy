@@ -116,7 +116,10 @@ export function DCircles({
       {currentQuote && (
         <div className="text-center">
           <span className="font-mono text-lg font-bold text-foreground">
-            {currentQuote}
+            {currentQuote.slice(0, -1)}
+          </span>
+          <span className="font-mono text-2xl font-black text-red-500">
+            {currentQuote.slice(-1)}
           </span>
         </div>
       )}
@@ -207,6 +210,28 @@ export function DCircles({
                     {percentage.toFixed(1)}%
                   </span>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Even/Odd continuous sequence */}
+      {digitHistory.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Even / Odd Stream</p>
+          <div className="flex flex-wrap gap-0.5">
+            {digitHistory.slice(-100).map((d, i) => {
+              const isEven = d % 2 === 0;
+              return (
+                <span
+                  key={i}
+                  className={`text-[9px] font-mono font-bold ${
+                    isEven ? "text-green-400" : "text-red-400"
+                  }`}
+                >
+                  {d}{isEven ? "E" : "O"}
+                </span>
               );
             })}
           </div>
