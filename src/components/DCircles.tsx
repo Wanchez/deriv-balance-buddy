@@ -7,23 +7,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 interface DCirclesProps {
   digitHistory: number[];
   lastDigit: number | null;
   currentQuote: string | null;
   isStreaming: boolean;
+  isLoadingHistory: boolean;
   symbol: string;
+  historyCount: number;
   onSymbolChange: (symbol: string) => void;
+  onHistoryCountChange: (count: number) => void;
 }
+
+const PRESET_COUNTS = [50, 200, 500, 1000];
 
 export function DCircles({
   digitHistory,
   lastDigit,
   currentQuote,
   isStreaming,
+  isLoadingHistory,
   symbol,
+  historyCount,
   onSymbolChange,
+  onHistoryCountChange,
 }: DCirclesProps) {
   const stats = useMemo(() => {
     const total = digitHistory.length;
@@ -37,21 +46,57 @@ export function DCircles({
   }, [digitHistory]);
 
   const maxPercentage = Math.max(...stats.map((s) => s.percentage), 1);
+  const minPercentage = Math.min(...stats.map((s) => s.percentage));
+  const maxCount = Math.max(...stats.map((s) => s.count), 1);
+
+  // Find the most and least appearing digits
+  const mostAppearing = stats.reduce((a, b) => (b.count > a.count ? b : a), stats[0]);
+  const leastAppearing = stats.reduce((a, b) => (b.count < a.count && digitHistory.length > 0 ? b : a), stats[0]);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
       {/* Header with symbol selector */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold font-display">D-Circles</h3>
           {isStreaming && (
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
           )}
+          {isLoadingHistory && (
+            <span className="text-[10px] text-muted-foreground animate-pulse">Loading history…</span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
             {digitHistory.length} ticks
           </span>
+          {/* History count presets */}
+          <div className="flex items-center gap-1">
+            {PRESET_COUNTS.map((c) => (
+              <button
+                key={c}
+                onClick={() => onHistoryCountChange(c)}
+                className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                  historyCount === c
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+            <Input
+              type="number"
+              min={10}
+              max={5000}
+              value={historyCount}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (v >= 10) onHistoryCountChange(v);
+              }}
+              className="w-16 h-6 text-[10px] text-center bg-muted"
+            />
+          </div>
           <Select value={symbol} onValueChange={onSymbolChange}>
             <SelectTrigger className="w-[140px] h-7 text-xs bg-muted">
               <SelectValue />
@@ -81,8 +126,8 @@ export function DCircles({
         {stats.map(({ digit, count, percentage }) => {
           const intensity = maxPercentage > 0 ? percentage / maxPercentage : 0;
           const isActive = lastDigit === digit;
-          const isHot = percentage > 12;
-          const isCold = percentage < 8 && digitHistory.length > 20;
+          const isMost = digitHistory.length > 10 && count === mostAppearing.count && count > 0;
+          const isLeast = digitHistory.length > 10 && count === leastAppearing.count && percentage < maxPercentage;
 
           return (
             <div key={digit} className="flex flex-col items-center gap-1">
@@ -94,10 +139,10 @@ export function DCircles({
                     ? "ring-2 ring-primary ring-offset-1 ring-offset-background scale-110"
                     : ""
                   }
-                  ${isHot
-                    ? "bg-primary/20 text-primary border border-primary/40"
-                    : isCold
-                      ? "bg-destructive/15 text-destructive border border-destructive/30"
+                  ${isMost
+                    ? "bg-green-500/20 text-green-400 border border-green-500/40"
+                    : isLeast
+                      ? "bg-red-500/20 text-red-400 border border-red-500/40"
                       : "bg-muted text-foreground border border-border"
                   }
                 `}
@@ -117,14 +162,14 @@ export function DCircles({
                     cy="20"
                     r="18"
                     fill="none"
-                    stroke={isHot ? "hsl(var(--primary) / 0.3)" : "hsl(var(--border))"}
+                    stroke={isMost ? "rgba(34,197,94,0.4)" : isLeast ? "rgba(239,68,68,0.4)" : "hsl(var(--border))"}
                     strokeWidth="2"
                     strokeDasharray={`${intensity * 113} 113`}
                     className="transition-all duration-500"
                   />
                 </svg>
               </div>
-              <span className="text-[10px] font-mono text-muted-foreground">
+              <span className={`text-[10px] font-mono ${isMost ? "text-green-400" : isLeast ? "text-red-400" : "text-muted-foreground"}`}>
                 {percentage.toFixed(1)}%
               </span>
               <span className="text-[9px] text-muted-foreground/60">
@@ -134,6 +179,39 @@ export function DCircles({
           );
         })}
       </div>
+
+      {/* Frequency bars */}
+      {digitHistory.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Frequency</p>
+          <div className="space-y-0.5">
+            {stats.map(({ digit, count, percentage }) => {
+              const isMost = count === mostAppearing.count && count > 0;
+              const isLeast = count === leastAppearing.count && percentage < maxPercentage;
+              const barWidth = maxCount > 0 ? (count / maxCount) * 100 : 0;
+
+              return (
+                <div key={digit} className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-muted-foreground w-3 text-right">{digit}</span>
+                  <div className="flex-1 h-3 bg-muted rounded-sm overflow-hidden">
+                    <div
+                      className={`h-full rounded-sm transition-all duration-500 ${
+                        isMost ? "bg-green-500/70" : isLeast ? "bg-red-500/70" : "bg-primary/40"
+                      }`}
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                  <span className={`text-[9px] font-mono w-10 text-right ${
+                    isMost ? "text-green-400" : isLeast ? "text-red-400" : "text-muted-foreground"
+                  }`}>
+                    {percentage.toFixed(1)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Even/Odd/Over/Under summary */}
       {digitHistory.length > 0 && (
@@ -158,7 +236,7 @@ export function DCircles({
         </div>
       )}
 
-      {!isStreaming && digitHistory.length === 0 && (
+      {!isStreaming && digitHistory.length === 0 && !isLoadingHistory && (
         <p className="text-xs text-muted-foreground text-center py-2">
           Connect to start live digit analysis
         </p>
