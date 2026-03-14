@@ -116,7 +116,10 @@ export function DCircles({
       {currentQuote && (
         <div className="text-center">
           <span className="font-mono text-lg font-bold text-foreground">
-            {currentQuote}
+            {currentQuote.slice(0, -1)}
+          </span>
+          <span className="font-mono text-2xl font-black text-red-500">
+            {currentQuote.slice(-1)}
           </span>
         </div>
       )}
