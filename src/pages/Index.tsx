@@ -87,6 +87,15 @@ const Index = () => {
           onTokenLoaded={handleTokenLoaded}
         />
 
+        {/* Market Scanner - Cold digit alerts */}
+        <MarketScanner
+          alerts={scanner.alerts}
+          scanning={scanner.scanning}
+          scannedCount={scanner.scannedCount}
+          totalSymbols={scanner.totalSymbols}
+          onRescan={scanner.rescan}
+        />
+
         {/* D-Circles - Independent analysis tool, always visible when connected */}
         <DCircles
           digitHistory={dCircles.digitHistory}
