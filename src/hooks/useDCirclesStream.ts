@@ -8,6 +8,9 @@ export function useDCirclesStream(apiToken: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [historyCount, setHistoryCount] = useState(1000);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [pipSize, setPipSize] = useState(2); // decimal places for this symbol
+  const [historyCount, setHistoryCount] = useState(1000);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const symbolRef = useRef(symbol);
