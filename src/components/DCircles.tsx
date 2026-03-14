@@ -216,6 +216,28 @@ export function DCircles({
         </div>
       )}
 
+      {/* Even/Odd continuous sequence */}
+      {digitHistory.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Even / Odd Stream</p>
+          <div className="flex flex-wrap gap-0.5">
+            {digitHistory.slice(-100).map((d, i) => {
+              const isEven = d % 2 === 0;
+              return (
+                <span
+                  key={i}
+                  className={`text-[9px] font-mono font-bold ${
+                    isEven ? "text-green-400" : "text-red-400"
+                  }`}
+                >
+                  {d}{isEven ? "E" : "O"}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Even/Odd/Over/Under summary */}
       {digitHistory.length > 0 && (
         <div className="grid grid-cols-4 gap-2 pt-1">
