@@ -220,17 +220,17 @@ export function DCircles({
       {digitHistory.length > 0 && (
         <div className="space-y-1 pt-1">
           <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Even / Odd Stream</p>
-          <div className="flex flex-wrap gap-0.5">
-            {digitHistory.slice(-100).map((d, i) => {
+          <div className="flex flex-wrap">
+            {digitHistory.slice(-200).map((d, i) => {
               const isEven = d % 2 === 0;
               return (
                 <span
                   key={i}
-                  className={`text-[9px] font-mono font-bold ${
+                  className={`text-[10px] font-mono font-bold ${
                     isEven ? "text-green-400" : "text-red-400"
                   }`}
                 >
-                  {d}{isEven ? "E" : "O"}
+                  {isEven ? "E" : "O"}
                 </span>
               );
             })}
