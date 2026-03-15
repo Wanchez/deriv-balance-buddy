@@ -63,7 +63,8 @@ export function useOver5Under5(apiToken: string | null) {
   const [currentDigit, setCurrentDigit] = useState<number | null>(null);
   const [virtualCount, setVirtualCount] = useState(0);
   const [realLossCount, setRealLossCount] = useState(0);
-  const [stats, setStats] = useState<Over5Stats[]>([]);
+  const [digitHistory, setDigitHistory] = useState<number[]>([]);
+  const [statDepth, setStatDepth] = useState(200);
 
   const wsRef = useRef<WebSocket | null>(null);
   const configRef = useRef(DEFAULT_CONFIG);
@@ -77,15 +78,36 @@ export function useOver5Under5(apiToken: string | null) {
   const virtualCountRef = useRef(0);
   const currentStakeRef = useRef(DEFAULT_CONFIG.stake);
   const waitingForContractRef = useRef(false);
-  const inRecoveryRef = useRef(false); // Normal mode: real trading until recovery
+  const inRecoveryRef = useRef(false);
+
+  const digitHistoryRef = useRef<number[]>([]);
 
   // Stats WebSocket
   const statsWsRef = useRef<WebSocket | null>(null);
 
-  const STAT_BUCKETS = [50, 100, 500, 1000, 1200];
+  // Compute stats from digitHistory
+  const computeStats = useCallback((digits: number[], depth: number) => {
+    const slice = digits.slice(-depth);
+    const total = slice.length;
+    const barrier = configRef.current.barrier;
+    const overC = slice.filter((d) => d > barrier).length;
+    const underC = total - overC;
+    return {
+      tickCount: total,
+      overCount: overC,
+      underCount: underC,
+      overPct: total > 0 ? (overC / total) * 100 : 0,
+      underPct: total > 0 ? (underC / total) * 100 : 0,
+    };
+  }, []);
 
-  // --- Statistics fetching ---
-  const fetchStats = useCallback(() => {
+  const addDigitToHistory = useCallback((digit: number) => {
+    digitHistoryRef.current = [...digitHistoryRef.current, digit].slice(-1200);
+    setDigitHistory([...digitHistoryRef.current]);
+  }, []);
+
+  // --- Fetch initial 50 ticks ---
+  const fetchInitialTicks = useCallback(() => {
     if (!apiToken) return;
     if (statsWsRef.current) statsWsRef.current.close();
 
@@ -99,12 +121,10 @@ export function useOver5Under5(apiToken: string | null) {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.msg_type === "authorize" && !data.error) {
-        // Fetch max bucket size
-        const maxCount = Math.max(...STAT_BUCKETS);
         ws.send(JSON.stringify({
           ticks_history: configRef.current.symbol,
           adjust_start_time: 1,
-          count: maxCount,
+          count: 50,
           end: "latest",
           style: "ticks",
         }));
@@ -112,7 +132,6 @@ export function useOver5Under5(apiToken: string | null) {
 
       if (data.msg_type === "history" && data.history) {
         const prices: number[] = data.history.prices;
-        // Detect pip size
         let pipSize = 2;
         for (const p of prices) {
           const s = p.toString();
@@ -122,31 +141,12 @@ export function useOver5Under5(apiToken: string | null) {
             if (dec > pipSize) pipSize = dec;
           }
         }
-
         const digits = prices.map((p) => {
           const str = p.toFixed(pipSize);
           return parseInt(str.slice(-1), 10);
         });
-
-        const barrier = configRef.current.barrier;
-        const newStats: Over5Stats[] = STAT_BUCKETS.map((bucket) => {
-          const slice = digits.slice(-bucket);
-          const total = slice.length;
-          const overCount = slice.filter((d) => d > barrier - 1).length; // over barrier means digit >= barrier+1 for DIGITOVER
-          // For Over 5: digits 5,6,7,8,9 win (digit > barrier where barrier=5 means last digit > 5)
-          // Actually DIGITOVER barrier=5 wins when last digit > 5, so 6,7,8,9
-          const overC = slice.filter((d) => d > barrier).length;
-          const underC = total - overC;
-          return {
-            tickCount: total,
-            overCount: overC,
-            underCount: underC,
-            overPct: total > 0 ? (overC / total) * 100 : 0,
-            underPct: total > 0 ? (underC / total) * 100 : 0,
-          };
-        });
-
-        setStats(newStats);
+        digitHistoryRef.current = digits;
+        setDigitHistory([...digits]);
         ws.close();
       }
     };
@@ -154,9 +154,13 @@ export function useOver5Under5(apiToken: string | null) {
     ws.onerror = () => { };
   }, [apiToken]);
 
-  // Fetch stats on mount and when symbol changes
+  // Fetch on mount and when symbol changes
   useEffect(() => {
-    if (apiToken) fetchStats();
+    if (apiToken) {
+      digitHistoryRef.current = [];
+      setDigitHistory([]);
+      fetchInitialTicks();
+    }
   }, [apiToken, config.symbol]);
 
   // --- Trading logic ---
@@ -377,8 +381,8 @@ export function useOver5Under5(apiToken: string | null) {
     wsRef.current.send(JSON.stringify({ ticks: c.symbol, subscribe: 1 }));
 
     // Refresh stats
-    fetchStats();
-  }, [apiToken, fetchStats]);
+    fetchInitialTicks();
+  }, [apiToken, fetchInitialTicks]);
 
   const stop = useCallback(() => {
     runningRef.current = false;
@@ -411,6 +415,7 @@ export function useOver5Under5(apiToken: string | null) {
         const formatted = data.tick.quote.toFixed(pipSize);
         const digit = parseInt(formatted.slice(-1), 10);
         setCurrentDigit(digit);
+        addDigitToHistory(digit);
         handleTick(digit);
       }
 
@@ -463,10 +468,12 @@ export function useOver5Under5(apiToken: string | null) {
     currentDigit,
     virtualCount,
     realLossCount,
-    stats,
+    digitHistory,
+    statDepth,
+    setStatDepth,
+    computeStats,
     start,
     stop,
-    fetchStats,
-    STAT_BUCKETS,
+    fetchInitialTicks,
   };
 }
