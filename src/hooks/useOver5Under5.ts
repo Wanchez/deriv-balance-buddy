@@ -381,8 +381,8 @@ export function useOver5Under5(apiToken: string | null) {
     wsRef.current.send(JSON.stringify({ ticks: c.symbol, subscribe: 1 }));
 
     // Refresh stats
-    fetchStats();
-  }, [apiToken, fetchStats]);
+    fetchInitialTicks();
+  }, [apiToken, fetchInitialTicks]);
 
   const stop = useCallback(() => {
     runningRef.current = false;
