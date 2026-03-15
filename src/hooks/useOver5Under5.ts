@@ -415,6 +415,7 @@ export function useOver5Under5(apiToken: string | null) {
         const formatted = data.tick.quote.toFixed(pipSize);
         const digit = parseInt(formatted.slice(-1), 10);
         setCurrentDigit(digit);
+        addDigitToHistory(digit);
         handleTick(digit);
       }
 
