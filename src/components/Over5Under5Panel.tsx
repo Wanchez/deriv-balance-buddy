@@ -257,26 +257,41 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
           {/* Statistics */}
           <div className="rounded-lg border border-border bg-card p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Statistics</p>
-              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={bot.fetchStats}>
-                <RefreshCw className="w-3 h-3 mr-1" />
-                <span className="text-[10px]">Refresh</span>
-              </Button>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                Statistics ({bot.digitHistory.length} ticks collected)
+              </p>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={String(bot.statDepth)}
+                  onValueChange={(v) => bot.setStatDepth(parseInt(v))}
+                >
+                  <SelectTrigger className="h-6 w-20 text-[10px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[200, 500, 1000, 1200].map((d) => (
+                      <SelectItem key={d} value={String(d)} className="text-xs">{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="sm" className="h-6 px-2" onClick={bot.fetchInitialTicks}>
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  <span className="text-[10px]">Reset</span>
+                </Button>
+              </div>
             </div>
-            {bot.stats.length > 0 && bot.stats.map((s, i) => (
-              <div key={bot.STAT_BUCKETS[i]} className="space-y-1">
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>{bot.STAT_BUCKETS[i]} ticks</span>
-                  <span className="font-mono">{s.tickCount} actual</span>
-                </div>
-                <div className="space-y-0.5">
+            {bot.digitHistory.length > 0 && (() => {
+              const s = bot.computeStats(bot.digitHistory, bot.statDepth);
+              return (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>Depth: {bot.statDepth}</span>
+                    <span className="font-mono">{s.tickCount} ticks</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] w-12 text-green-400">Over {c.barrier}:</span>
                     <div className="flex-1 h-3 bg-muted rounded-sm overflow-hidden">
-                      <div
-                        className="h-full bg-green-500/70 rounded-sm transition-all"
-                        style={{ width: `${s.overPct}%` }}
-                      />
+                      <div className="h-full bg-green-500/70 rounded-sm transition-all" style={{ width: `${s.overPct}%` }} />
                     </div>
                     <span className="text-[10px] font-mono font-bold text-green-400 w-24 text-right">
                       {s.overPct.toFixed(1)}% ({s.overCount}/{s.tickCount})
@@ -285,18 +300,15 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] w-12 text-red-400">Under {c.barrier}:</span>
                     <div className="flex-1 h-3 bg-muted rounded-sm overflow-hidden">
-                      <div
-                        className="h-full bg-red-500/70 rounded-sm transition-all"
-                        style={{ width: `${s.underPct}%` }}
-                      />
+                      <div className="h-full bg-red-500/70 rounded-sm transition-all" style={{ width: `${s.underPct}%` }} />
                     </div>
                     <span className="text-[10px] font-mono font-bold text-red-400 w-24 text-right">
                       {s.underPct.toFixed(1)}% ({s.underCount}/{s.tickCount})
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })()}
           </div>
 
           {/* Bot Status */}
