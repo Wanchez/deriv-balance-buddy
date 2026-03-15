@@ -468,10 +468,12 @@ export function useOver5Under5(apiToken: string | null) {
     currentDigit,
     virtualCount,
     realLossCount,
-    stats,
+    digitHistory,
+    statDepth,
+    setStatDepth,
+    computeStats,
     start,
     stop,
-    fetchStats,
-    STAT_BUCKETS,
+    fetchInitialTicks,
   };
 }
