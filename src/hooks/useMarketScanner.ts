@@ -162,11 +162,11 @@ export function useMarketScanner(apiToken: string | null) {
     };
   }, [apiToken]);
 
-  // Auto-scan on connect and every 60s
+  // Auto-scan on connect and every 10s
   useEffect(() => {
     if (!apiToken) return;
     scan();
-    intervalRef.current = setInterval(scan, 60000);
+    intervalRef.current = setInterval(scan, 10000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (wsRef.current) wsRef.current.close();
