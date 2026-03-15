@@ -63,7 +63,8 @@ export function useOver5Under5(apiToken: string | null) {
   const [currentDigit, setCurrentDigit] = useState<number | null>(null);
   const [virtualCount, setVirtualCount] = useState(0);
   const [realLossCount, setRealLossCount] = useState(0);
-  const [stats, setStats] = useState<Over5Stats[]>([]);
+  const [digitHistory, setDigitHistory] = useState<number[]>([]);
+  const [statDepth, setStatDepth] = useState(200);
 
   const wsRef = useRef<WebSocket | null>(null);
   const configRef = useRef(DEFAULT_CONFIG);
@@ -77,12 +78,12 @@ export function useOver5Under5(apiToken: string | null) {
   const virtualCountRef = useRef(0);
   const currentStakeRef = useRef(DEFAULT_CONFIG.stake);
   const waitingForContractRef = useRef(false);
-  const inRecoveryRef = useRef(false); // Normal mode: real trading until recovery
+  const inRecoveryRef = useRef(false);
+
+  const digitHistoryRef = useRef<number[]>([]);
 
   // Stats WebSocket
   const statsWsRef = useRef<WebSocket | null>(null);
-
-  const STAT_BUCKETS = [50, 100, 500, 1000, 1200];
 
   // --- Statistics fetching ---
   const fetchStats = useCallback(() => {
