@@ -86,7 +86,10 @@ export function useMarketScanner(apiToken: string | null) {
     if (!apiToken) return;
 
     // Close previous
-    if (wsRef.current) wsRef.current.close();
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
     const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=123283");
     wsRef.current = ws;
@@ -97,6 +100,34 @@ export function useMarketScanner(apiToken: string | null) {
     let idx = 0;
     const allAlerts: MarketAlert[] = [];
 
+    // Timeout: if scan takes too long, close and show what we have
+    const timeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        setAlerts(allAlerts);
+        setScanning(false);
+        ws.close();
+      }
+    }, 8000);
+
+    const scanNext = () => {
+      if (idx >= symbols.length || ws.readyState !== WebSocket.OPEN) {
+        clearTimeout(timeout);
+        setAlerts(allAlerts);
+        setScanning(false);
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+        return;
+      }
+      ws.send(
+        JSON.stringify({
+          ticks_history: symbols[idx].value,
+          adjust_start_time: 1,
+          count: SCAN_TICKS,
+          end: "latest",
+          style: "ticks",
+        })
+      );
+    };
+
     ws.onopen = () => {
       ws.send(JSON.stringify({ authorize: apiToken }));
     };
@@ -104,61 +135,53 @@ export function useMarketScanner(apiToken: string | null) {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      if (data.msg_type === "authorize" && !data.error) {
-        // Start scanning first symbol
-        if (symbols.length > 0) {
-          ws.send(
-            JSON.stringify({
-              ticks_history: symbols[0].value,
-              adjust_start_time: 1,
-              count: SCAN_TICKS,
-              end: "latest",
-              style: "ticks",
-            })
-          );
-        }
+      if (data.error) {
+        // Skip errored symbols, continue scanning
+        idx++;
+        setScannedCount(idx);
+        scanNext();
+        return;
+      }
+
+      if (data.msg_type === "authorize") {
+        scanNext();
       }
 
       if (data.msg_type === "history" && data.history) {
         const prices: number[] = data.history.prices;
-        const pipSize = detectPipSize(prices);
-        const counts = Array(10).fill(0);
-        const digits = prices.map((p) => extractDigit(p, pipSize));
-        digits.forEach((d) => counts[d]++);
+        if (prices.length > 0) {
+          const pipSize = detectPipSize(prices);
+          const counts = Array(10).fill(0);
+          const digits = prices.map((p) => extractDigit(p, pipSize));
+          digits.forEach((d) => counts[d]++);
 
-        const total = digits.length;
-        const percentages: Record<number, number> = {};
-        for (let i = 0; i < 10; i++) {
-          percentages[i] = total > 0 ? (counts[i] / total) * 100 : 0;
+          const total = digits.length;
+          const percentages: Record<number, number> = {};
+          for (let i = 0; i < 10; i++) {
+            percentages[i] = total > 0 ? (counts[i] / total) * 100 : 0;
+          }
+
+          const sym = symbols[idx];
+          if (sym) {
+            const found = checkAlerts(sym.value, sym.label, percentages);
+            allAlerts.push(...found);
+          }
         }
-
-        const sym = symbols[idx];
-        const found = checkAlerts(sym.value, sym.label, percentages);
-        allAlerts.push(...found);
 
         idx++;
         setScannedCount(idx);
-
-        if (idx < symbols.length) {
-          ws.send(
-            JSON.stringify({
-              ticks_history: symbols[idx].value,
-              adjust_start_time: 1,
-              count: SCAN_TICKS,
-              end: "latest",
-              style: "ticks",
-            })
-          );
-        } else {
-          setAlerts(allAlerts);
-          setScanning(false);
-          ws.close();
-        }
+        scanNext();
       }
     };
 
     ws.onerror = () => {
+      clearTimeout(timeout);
       setScanning(false);
+      setAlerts(allAlerts);
+    };
+
+    ws.onclose = () => {
+      clearTimeout(timeout);
     };
   }, [apiToken]);
 

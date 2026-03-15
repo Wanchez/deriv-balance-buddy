@@ -5,6 +5,7 @@ import { BotControls } from "@/components/BotControls";
 import { TradeLogPanel } from "@/components/TradeLog";
 import { DCircles } from "@/components/DCircles";
 import { MarketScanner } from "@/components/MarketScanner";
+import { Over5Under5Panel } from "@/components/Over5Under5Panel";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { useDCirclesStream } from "@/hooks/useDCirclesStream";
 import { useMarketScanner } from "@/hooks/useMarketScanner";
@@ -18,6 +19,7 @@ const Index = () => {
   const [apiToken, setApiToken] = useState<string | null>(null);
   const dCircles = useDCirclesStream(apiToken);
   const scanner = useMarketScanner(apiToken);
+  const [activeMainTab, setActiveMainTab] = useState("strategies");
 
   const handleConnect = useCallback((token: string) => {
     setApiToken(token);
@@ -26,12 +28,10 @@ const Index = () => {
 
   const handleDisconnect = useCallback(() => {
     deriv.disconnect();
-    // Keep DCircles streaming - it's independent
   }, [deriv.disconnect]);
 
   const handleTokenLoaded = useCallback((token: string) => {
     setApiToken(token);
-    // Auto-connect with saved token
     deriv.connect(token);
   }, [deriv.connect]);
 
@@ -66,7 +66,7 @@ const Index = () => {
           </div>
           {deriv.isConnected && (
             <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              {BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
+              {activeMainTab === "over5under5" ? "Over/Under 5" : BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
             </span>
           )}
         </div>
@@ -87,7 +87,7 @@ const Index = () => {
           onTokenLoaded={handleTokenLoaded}
         />
 
-        {/* Market Scanner - Cold digit alerts */}
+        {/* Market Scanner */}
         <MarketScanner
           alerts={scanner.alerts}
           scanning={scanner.scanning}
@@ -96,7 +96,7 @@ const Index = () => {
           onRescan={scanner.rescan}
         />
 
-        {/* D-Circles - Independent analysis tool, always visible when connected */}
+        {/* D-Circles */}
         <DCircles
           digitHistory={dCircles.digitHistory}
           lastDigit={dCircles.lastDigit}
@@ -109,56 +109,69 @@ const Index = () => {
           onHistoryCountChange={dCircles.changeHistoryCount}
         />
 
-        {/* Bot Tabs */}
-        <Tabs
-          value={deriv.strategy.botType}
-          onValueChange={handleTabChange}
-        >
-          <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            {BOT_DEFINITIONS.map((bot) => (
-              <TabsTrigger
-                key={bot.id}
-                value={bot.id}
-                disabled={deriv.isRunning && deriv.strategy.botType !== bot.id}
-                className="flex-1 min-w-[120px] text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-              >
-                {bot.name}
-              </TabsTrigger>
-            ))}
+        {/* Main Tabs: Strategies vs Over5/Under5 */}
+        <Tabs value={activeMainTab} onValueChange={setActiveMainTab}>
+          <TabsList className="w-full flex h-auto gap-1 bg-muted/50 p-1">
+            <TabsTrigger value="strategies" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Bot Strategies
+            </TabsTrigger>
+            <TabsTrigger value="over5under5" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Over/Under 5
+            </TabsTrigger>
           </TabsList>
 
-          {BOT_DEFINITIONS.map((bot) => (
-            <TabsContent key={bot.id} value={bot.id} className="mt-4">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <div className="lg:col-span-4 space-y-5">
-                  <div className="rounded-lg border border-border bg-card p-4">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {bot.description}
-                    </p>
-                  </div>
-                  <StrategyPanel
-                    strategy={deriv.strategy}
-                    onUpdate={deriv.updateStrategy}
-                    disabled={deriv.isRunning}
-                  />
-                </div>
+          <TabsContent value="strategies" className="mt-4">
+            <Tabs value={deriv.strategy.botType} onValueChange={handleTabChange}>
+              <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
+                {BOT_DEFINITIONS.map((bot) => (
+                  <TabsTrigger
+                    key={bot.id}
+                    value={bot.id}
+                    disabled={deriv.isRunning && deriv.strategy.botType !== bot.id}
+                    className="flex-1 min-w-[120px] text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    {bot.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-                <div className="lg:col-span-8 space-y-5">
-                  <BotControls
-                    isConnected={deriv.isConnected}
-                    isRunning={deriv.isRunning}
-                    totalProfit={deriv.totalProfit}
-                    tradeCount={deriv.trades.filter((t) => t.result !== "pending").length}
-                    botStatus={deriv.botStatus}
-                    currentDigit={deriv.currentDigit}
-                    onStart={deriv.startBot}
-                    onStop={deriv.stopBot}
-                  />
-                  <TradeLogPanel trades={deriv.trades} />
-                </div>
-              </div>
-            </TabsContent>
-          ))}
+              {BOT_DEFINITIONS.map((bot) => (
+                <TabsContent key={bot.id} value={bot.id} className="mt-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div className="lg:col-span-4 space-y-5">
+                      <div className="rounded-lg border border-border bg-card p-4">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {bot.description}
+                        </p>
+                      </div>
+                      <StrategyPanel
+                        strategy={deriv.strategy}
+                        onUpdate={deriv.updateStrategy}
+                        disabled={deriv.isRunning}
+                      />
+                    </div>
+                    <div className="lg:col-span-8 space-y-5">
+                      <BotControls
+                        isConnected={deriv.isConnected}
+                        isRunning={deriv.isRunning}
+                        totalProfit={deriv.totalProfit}
+                        tradeCount={deriv.trades.filter((t) => t.result !== "pending").length}
+                        botStatus={deriv.botStatus}
+                        currentDigit={deriv.currentDigit}
+                        onStart={deriv.startBot}
+                        onStop={deriv.stopBot}
+                      />
+                      <TradeLogPanel trades={deriv.trades} />
+                    </div>
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="over5under5" className="mt-4">
+            <Over5Under5Panel apiToken={apiToken} />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
