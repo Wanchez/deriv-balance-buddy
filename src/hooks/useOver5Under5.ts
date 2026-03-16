@@ -35,6 +35,7 @@ export interface Over5Stats {
   tickCount: number;
   overCount: number;
   underCount: number;
+  equalCount: number;
   overPct: number;
   underPct: number;
 }
@@ -91,11 +92,13 @@ export function useOver5Under5(apiToken: string | null) {
     const total = slice.length;
     const barrier = configRef.current.barrier;
     const overC = slice.filter((d) => d > barrier).length;
-    const underC = total - overC;
+    const underC = slice.filter((d) => d < barrier).length;
+    const equalC = slice.filter((d) => d === barrier).length;
     return {
       tickCount: total,
       overCount: overC,
       underCount: underC,
+      equalCount: equalC,
       overPct: total > 0 ? (overC / total) * 100 : 0,
       underPct: total > 0 ? (underC / total) * 100 : 0,
     };
@@ -376,10 +379,6 @@ export function useOver5Under5(apiToken: string | null) {
     const c = configRef.current;
     setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | L: 0/${c.virtualEntryCount}`);
 
-    // Subscribe to ticks
-    wsRef.current.send(JSON.stringify({ forget_all: "ticks" }));
-    wsRef.current.send(JSON.stringify({ ticks: c.symbol, subscribe: 1 }));
-
     // Refresh stats
     fetchInitialTicks();
   }, [apiToken, fetchInitialTicks]);
@@ -405,6 +404,12 @@ export function useOver5Under5(apiToken: string | null) {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
+      if (data.msg_type === "authorize" && !data.error) {
+        // Start streaming ticks immediately after auth
+        ws.send(JSON.stringify({ forget_all: "ticks" }));
+        ws.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
+      }
 
       if (data.msg_type === "tick" && data.tick) {
         if (data.tick.symbol !== configRef.current.symbol) return;
@@ -443,9 +448,18 @@ export function useOver5Under5(apiToken: string | null) {
     };
   }, [apiToken, handleTick, handleContractResult]);
 
-  // Auto-connect when token available
+  // Auto-connect and start streaming when token available
   useEffect(() => {
-    if (apiToken) connect();
+    if (apiToken) {
+      connect();
+      // Start tick streaming immediately (independent of bot)
+      setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ forget_all: "ticks" }));
+          wsRef.current.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
+        }
+      }, 1500);
+    }
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (statsWsRef.current) statsWsRef.current.close();
