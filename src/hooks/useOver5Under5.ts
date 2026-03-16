@@ -408,6 +408,12 @@ export function useOver5Under5(apiToken: string | null) {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
+      if (data.msg_type === "authorize" && !data.error) {
+        // Start streaming ticks immediately after auth
+        ws.send(JSON.stringify({ forget_all: "ticks" }));
+        ws.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
+      }
+
       if (data.msg_type === "tick" && data.tick) {
         if (data.tick.symbol !== configRef.current.symbol) return;
         const quoteStr = String(data.tick.quote);
