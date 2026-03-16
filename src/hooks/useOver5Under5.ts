@@ -35,6 +35,7 @@ export interface Over5Stats {
   tickCount: number;
   overCount: number;
   underCount: number;
+  equalCount: number;
   overPct: number;
   underPct: number;
 }
