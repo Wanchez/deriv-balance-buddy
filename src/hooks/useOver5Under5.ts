@@ -445,9 +445,18 @@ export function useOver5Under5(apiToken: string | null) {
     };
   }, [apiToken, handleTick, handleContractResult]);
 
-  // Auto-connect when token available
+  // Auto-connect and start streaming when token available
   useEffect(() => {
-    if (apiToken) connect();
+    if (apiToken) {
+      connect();
+      // Start tick streaming immediately (independent of bot)
+      setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ forget_all: "ticks" }));
+          wsRef.current.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
+        }
+      }, 1500);
+    }
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (statsWsRef.current) statsWsRef.current.close();
