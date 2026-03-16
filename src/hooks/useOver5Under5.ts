@@ -91,11 +91,13 @@ export function useOver5Under5(apiToken: string | null) {
     const total = slice.length;
     const barrier = configRef.current.barrier;
     const overC = slice.filter((d) => d > barrier).length;
-    const underC = total - overC;
+    const underC = slice.filter((d) => d < barrier).length;
+    const equalC = slice.filter((d) => d === barrier).length;
     return {
       tickCount: total,
       overCount: overC,
       underCount: underC,
+      equalCount: equalC,
       overPct: total > 0 ? (overC / total) * 100 : 0,
       underPct: total > 0 ? (underC / total) * 100 : 0,
     };
