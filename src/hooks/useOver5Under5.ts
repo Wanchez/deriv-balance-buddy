@@ -378,10 +378,6 @@ export function useOver5Under5(apiToken: string | null) {
     const c = configRef.current;
     setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | L: 0/${c.virtualEntryCount}`);
 
-    // Subscribe to ticks
-    wsRef.current.send(JSON.stringify({ forget_all: "ticks" }));
-    wsRef.current.send(JSON.stringify({ ticks: c.symbol, subscribe: 1 }));
-
     // Refresh stats
     fetchInitialTicks();
   }, [apiToken, fetchInitialTicks]);
