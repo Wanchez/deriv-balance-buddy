@@ -485,8 +485,31 @@ export function useOver5Under5(apiToken: string | null) {
     const scanNext = () => {
       if (idx >= symbols.length || ws.readyState !== WebSocket.OPEN) {
         setAutoMarketStats(results);
+
+        // Check if current active symbol is still eligible
+        const currentSymbol = configRef.current.symbol;
+        const currentResult = results.find((r) => r.symbol === currentSymbol);
+        const currentStillEligible = currentResult?.eligible ?? false;
+
+        // If bot is running but current market is no longer eligible, stop immediately
+        if (runningRef.current && !currentStillEligible) {
+          runningRef.current = false;
+          setIsRunning(false);
+          waitingForContractRef.current = false;
+          inVirtualModeRef.current = true;
+          virtualCountRef.current = 0;
+          setVirtualCount(0);
+          currentStakeRef.current = configRef.current.stake;
+          inRecoveryRef.current = false;
+          setBotStatus("⏸ Auto: Market conditions changed, stopped.");
+          setAutoActiveSymbol(null);
+        }
+
+        // Find best eligible market (could be current or different)
         const eligible = results.find((r) => r.eligible);
+
         if (eligible && autoModeRef.current && !runningRef.current) {
+          // Switch to eligible market and prepare to start
           setAutoActiveSymbol(eligible.symbol);
           configRef.current = { ...configRef.current, symbol: eligible.symbol, direction: "over" };
           setConfig({ ...configRef.current });
@@ -495,6 +518,7 @@ export function useOver5Under5(apiToken: string | null) {
           if (runningRef.current) {
             runningRef.current = false;
             setIsRunning(false);
+            waitingForContractRef.current = false;
             setBotStatus("⏸ Auto: No eligible market, waiting...");
           }
         }
