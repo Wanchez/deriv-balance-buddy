@@ -11,6 +11,7 @@ export interface VirtualTrade {
   timestamp: Date;
   entryDigit: number;
   isVirtual: boolean;
+  symbol?: string;
 }
 
 export type StopLossMode = "amount" | "losses";
@@ -40,6 +41,14 @@ export interface Over5Stats {
   underPct: number;
 }
 
+export interface AutoModeMarketStats {
+  symbol: string;
+  label: string;
+  overPct: number;
+  underPct: number;
+  eligible: boolean;
+}
+
 const DEFAULT_CONFIG: Over5Config = {
   symbol: "1HZ75V",
   direction: "over",
@@ -67,6 +76,10 @@ export function useOver5Under5(apiToken: string | null) {
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
   const [statDepth, setStatDepth] = useState(200);
 
+  const [autoMode, setAutoMode] = useState(false);
+  const [autoMarketStats, setAutoMarketStats] = useState<AutoModeMarketStats[]>([]);
+  const [autoActiveSymbol, setAutoActiveSymbol] = useState<string | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const configRef = useRef(DEFAULT_CONFIG);
   const runningRef = useRef(false);
@@ -74,7 +87,6 @@ export function useOver5Under5(apiToken: string | null) {
   const totalProfitRef = useRef(0);
   const realLossCountRef = useRef(0);
 
-  // Virtual mode tracking
   const inVirtualModeRef = useRef(true);
   const virtualCountRef = useRef(0);
   const currentStakeRef = useRef(DEFAULT_CONFIG.stake);
@@ -83,10 +95,12 @@ export function useOver5Under5(apiToken: string | null) {
 
   const digitHistoryRef = useRef<number[]>([]);
 
-  // Stats WebSocket
   const statsWsRef = useRef<WebSocket | null>(null);
 
-  // Compute stats from digitHistory
+  const autoModeRef = useRef(false);
+  const autoScanWsRef = useRef<WebSocket | null>(null);
+  const autoScanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const computeStats = useCallback((digits: number[], depth: number) => {
     const slice = digits.slice(-depth);
     const total = slice.length;
@@ -109,7 +123,17 @@ export function useOver5Under5(apiToken: string | null) {
     setDigitHistory([...digitHistoryRef.current]);
   }, []);
 
-  // --- Fetch initial 50 ticks ---
+  const resubscribeTicks = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ forget_all: "ticks" }));
+    setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
+      }
+    }, 200);
+  }, []);
+
   const fetchInitialTicks = useCallback(() => {
     if (!apiToken) return;
     if (statsWsRef.current) statsWsRef.current.close();
@@ -157,16 +181,16 @@ export function useOver5Under5(apiToken: string | null) {
     ws.onerror = () => { };
   }, [apiToken]);
 
-  // Fetch on mount and when symbol changes
   useEffect(() => {
     if (apiToken) {
       digitHistoryRef.current = [];
       setDigitHistory([]);
+      setCurrentDigit(null);
       fetchInitialTicks();
+      resubscribeTicks();
     }
   }, [apiToken, config.symbol]);
 
-  // --- Trading logic ---
   const evaluateTick = useCallback((digit: number): "win" | "loss" => {
     const c = configRef.current;
     if (c.direction === "over") {
@@ -254,14 +278,11 @@ export function useOver5Under5(apiToken: string | null) {
     const c = configRef.current;
     const result = evaluateTick(digit);
 
-    // If in recovery mode (Normal mode after a real loss)
     if (inRecoveryRef.current) {
-      // Keep placing real trades until win
       placeRealTrade(digit);
       return;
     }
 
-    // Virtual mode: demo trades
     if (inVirtualModeRef.current) {
       addVirtualTrade(digit, result);
 
@@ -274,7 +295,6 @@ export function useOver5Under5(apiToken: string | null) {
         setVirtualCount(virtualCountRef.current);
         setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | W: ${virtualCountRef.current}/${c.virtualEntryCount}`);
       } else if (c.virtualEntryTrigger === "losses" && result === "win") {
-        // Reset counter on win
         virtualCountRef.current = 0;
         setVirtualCount(0);
         setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | L: 0/${c.virtualEntryCount}`);
@@ -284,17 +304,14 @@ export function useOver5Under5(apiToken: string | null) {
         setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | W: 0/${c.virtualEntryCount}`);
       }
 
-      // Check if trigger reached
       if (virtualCountRef.current >= c.virtualEntryCount) {
         inVirtualModeRef.current = false;
         virtualCountRef.current = 0;
         setVirtualCount(0);
         currentStakeRef.current = c.stake;
         setBotStatus("🔴 Triggered! Placing real trade...");
-        // Don't trade on this tick - wait for next
       }
     } else {
-      // Place real trade
       placeRealTrade(digit);
     }
   }, [evaluateTick, addVirtualTrade, placeRealTrade]);
@@ -306,7 +323,6 @@ export function useOver5Under5(apiToken: string | null) {
     totalProfitRef.current += profit;
     setTotalProfit(totalProfitRef.current);
 
-    // Update trade result
     setTrades((prev) =>
       prev.map((t) =>
         t.result === "pending" && !t.isVirtual
@@ -331,7 +347,6 @@ export function useOver5Under5(apiToken: string | null) {
     if (!runningRef.current) return;
 
     if (isWin) {
-      // Win: reset to virtual mode
       inRecoveryRef.current = false;
       inVirtualModeRef.current = true;
       virtualCountRef.current = 0;
@@ -339,16 +354,13 @@ export function useOver5Under5(apiToken: string | null) {
       currentStakeRef.current = c.stake;
       setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | L: 0/${c.virtualEntryCount}`);
     } else {
-      // Loss
       currentStakeRef.current = currentStakeRef.current * c.martingale;
 
       if (c.mode === "normal") {
-        // Normal: keep real trading until recovery
         inRecoveryRef.current = true;
         inVirtualModeRef.current = false;
         setBotStatus(`Recovery — $${currentStakeRef.current.toFixed(2)}`);
       } else {
-        // Turbo: go back to virtual mode
         inRecoveryRef.current = false;
         inVirtualModeRef.current = true;
         virtualCountRef.current = 0;
@@ -379,7 +391,6 @@ export function useOver5Under5(apiToken: string | null) {
     const c = configRef.current;
     setBotStatus(`Virtual Mode — ${c.direction === "over" ? "Over" : "Under"} ${c.barrier} | L: 0/${c.virtualEntryCount}`);
 
-    // Refresh stats
     fetchInitialTicks();
   }, [apiToken, fetchInitialTicks]);
 
@@ -390,7 +401,6 @@ export function useOver5Under5(apiToken: string | null) {
     setBotStatus("Stopped");
   }, []);
 
-  // Connect WebSocket
   const connect = useCallback(() => {
     if (!apiToken) return;
     if (wsRef.current) wsRef.current.close();
@@ -406,8 +416,6 @@ export function useOver5Under5(apiToken: string | null) {
       const data = JSON.parse(event.data);
 
       if (data.msg_type === "authorize" && !data.error) {
-        // Start streaming ticks immediately after auth
-        ws.send(JSON.stringify({ forget_all: "ticks" }));
         ws.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
       }
 
@@ -446,19 +454,11 @@ export function useOver5Under5(apiToken: string | null) {
       runningRef.current = false;
       setIsRunning(false);
     };
-  }, [apiToken, handleTick, handleContractResult]);
+  }, [apiToken, handleTick, handleContractResult, addDigitToHistory]);
 
-  // Auto-connect and start streaming when token available
   useEffect(() => {
     if (apiToken) {
       connect();
-      // Start tick streaming immediately (independent of bot)
-      setTimeout(() => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ forget_all: "ticks" }));
-          wsRef.current.send(JSON.stringify({ ticks: configRef.current.symbol, subscribe: 1 }));
-        }
-      }, 1500);
     }
     return () => {
       if (wsRef.current) wsRef.current.close();
@@ -466,10 +466,149 @@ export function useOver5Under5(apiToken: string | null) {
     };
   }, [apiToken]);
 
+  const runAutoScan = useCallback(() => {
+    if (!apiToken) return;
+    if (autoScanWsRef.current) autoScanWsRef.current.close();
+
+    const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=123283");
+    autoScanWsRef.current = ws;
+
+    const symbols = VOLATILITY_SYMBOLS.map((s) => ({ ...s }));
+    let idx = 0;
+    const results: AutoModeMarketStats[] = [];
+    const barrier = configRef.current.barrier;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ authorize: apiToken }));
+    };
+
+    const scanNext = () => {
+      if (idx >= symbols.length || ws.readyState !== WebSocket.OPEN) {
+        setAutoMarketStats(results);
+        const eligible = results.find((r) => r.eligible);
+        if (eligible && autoModeRef.current && !runningRef.current) {
+          setAutoActiveSymbol(eligible.symbol);
+          configRef.current = { ...configRef.current, symbol: eligible.symbol, direction: "over" };
+          setConfig({ ...configRef.current });
+        } else if (!eligible) {
+          setAutoActiveSymbol(null);
+          if (runningRef.current) {
+            runningRef.current = false;
+            setIsRunning(false);
+            setBotStatus("⏸ Auto: No eligible market, waiting...");
+          }
+        }
+        ws.close();
+        return;
+      }
+      ws.send(JSON.stringify({
+        ticks_history: symbols[idx].value,
+        adjust_start_time: 1,
+        count: 1000,
+        end: "latest",
+        style: "ticks",
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.error) {
+        idx++;
+        scanNext();
+        return;
+      }
+
+      if (data.msg_type === "authorize") {
+        scanNext();
+      }
+
+      if (data.msg_type === "history" && data.history) {
+        const prices: number[] = data.history.prices;
+        if (prices.length > 0) {
+          let pipSize = 2;
+          for (const p of prices) {
+            const s = p.toString();
+            const dot = s.indexOf(".");
+            if (dot !== -1) {
+              const dec = s.length - dot - 1;
+              if (dec > pipSize) pipSize = dec;
+            }
+          }
+          const digits = prices.map((p) => {
+            const str = p.toFixed(pipSize);
+            return parseInt(str.slice(-1), 10);
+          });
+          const total = digits.length;
+          const overC = digits.filter((d) => d > barrier).length;
+          const underC = digits.filter((d) => d < barrier).length;
+          const overPct = total > 0 ? (overC / total) * 100 : 0;
+          const underPct = total > 0 ? (underC / total) * 100 : 0;
+
+          const eligible = overPct >= 40.9 && overPct <= 45 && underPct >= 45.9 && underPct <= 49.9;
+
+          const sym = symbols[idx];
+          if (sym) {
+            results.push({
+              symbol: sym.value,
+              label: sym.label,
+              overPct,
+              underPct,
+              eligible,
+            });
+          }
+        }
+        idx++;
+        scanNext();
+      }
+    };
+
+    ws.onerror = () => { };
+    ws.onclose = () => { };
+  }, [apiToken]);
+
+  useEffect(() => {
+    autoModeRef.current = autoMode;
+    if (autoMode && apiToken) {
+      runAutoScan();
+      autoScanIntervalRef.current = setInterval(runAutoScan, 10000);
+    } else {
+      if (autoScanIntervalRef.current) {
+        clearInterval(autoScanIntervalRef.current);
+        autoScanIntervalRef.current = null;
+      }
+      if (autoScanWsRef.current) {
+        autoScanWsRef.current.close();
+        autoScanWsRef.current = null;
+      }
+      setAutoActiveSymbol(null);
+      setAutoMarketStats([]);
+    }
+    return () => {
+      if (autoScanIntervalRef.current) clearInterval(autoScanIntervalRef.current);
+      if (autoScanWsRef.current) autoScanWsRef.current.close();
+    };
+  }, [autoMode, apiToken, runAutoScan]);
+
+  useEffect(() => {
+    if (autoMode && autoActiveSymbol && !isRunning && apiToken) {
+      const timer = setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && autoModeRef.current) {
+          start();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoActiveSymbol, autoMode, isRunning, apiToken, start]);
+
   const updateConfig = useCallback((newConfig: Over5Config) => {
     setConfig(newConfig);
     configRef.current = newConfig;
     currentStakeRef.current = newConfig.stake;
+  }, []);
+
+  const toggleAutoMode = useCallback(() => {
+    setAutoMode((prev) => !prev);
   }, []);
 
   return {
@@ -489,5 +628,9 @@ export function useOver5Under5(apiToken: string | null) {
     start,
     stop,
     fetchInitialTicks,
+    autoMode,
+    toggleAutoMode,
+    autoMarketStats,
+    autoActiveSymbol,
   };
 }

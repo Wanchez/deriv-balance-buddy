@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Play, Square, RefreshCw } from "lucide-react";
+import { Play, Square, RefreshCw, Zap } from "lucide-react";
 
 interface Over5Under5PanelProps {
   apiToken: string | null;
@@ -34,7 +34,7 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Market</Label>
-                <Select value={c.symbol} onValueChange={(v) => update({ symbol: v })} disabled={bot.isRunning}>
+                <Select value={c.symbol} onValueChange={(v) => update({ symbol: v })} disabled={bot.isRunning || bot.autoMode}>
                   <SelectTrigger className="h-8 text-xs mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -107,22 +107,36 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
               </div>
             )}
 
-            {/* Start Button */}
-            <Button
-              onClick={bot.isRunning ? bot.stop : bot.start}
-              className={`w-full h-10 font-bold text-sm ${
-                bot.isRunning
-                  ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                  : "bg-red-500 hover:bg-red-600 text-white"
-              }`}
-              disabled={!apiToken}
-            >
-              {bot.isRunning ? (
-                <><Square className="w-4 h-4 mr-2" /> Stop</>
-              ) : (
-                <><Play className="w-4 h-4 mr-2" /> Start Auto</>
-              )}
-            </Button>
+            {/* Start & Auto Buttons */}
+            <div className="flex gap-2">
+              <Button
+                onClick={bot.isRunning ? bot.stop : bot.start}
+                className={`flex-1 h-10 font-bold text-sm ${
+                  bot.isRunning
+                    ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    : "bg-red-500 hover:bg-red-600 text-white"
+                }`}
+                disabled={!apiToken || bot.autoMode}
+              >
+                {bot.isRunning ? (
+                  <><Square className="w-4 h-4 mr-2" /> Stop</>
+                ) : (
+                  <><Play className="w-4 h-4 mr-2" /> Start Auto</>
+                )}
+              </Button>
+              <Button
+                onClick={bot.toggleAutoMode}
+                className={`h-10 px-4 font-bold text-sm ${
+                  bot.autoMode
+                    ? "bg-amber-500 hover:bg-amber-600 text-white"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                }`}
+                disabled={!apiToken}
+              >
+                <Zap className="w-4 h-4 mr-1" />
+                {bot.autoMode ? "Auto ON" : "Auto"}
+              </Button>
+            </div>
           </div>
 
           {/* Main Strategy */}
@@ -137,14 +151,14 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
                     className={`flex-1 py-1.5 text-xs font-bold transition-colors ${
                       c.direction === "over" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                     }`}
-                    disabled={bot.isRunning}
+                    disabled={bot.isRunning || bot.autoMode}
                   >Over</button>
                   <button
                     onClick={() => update({ direction: "under" })}
                     className={`flex-1 py-1.5 text-xs font-bold transition-colors ${
                       c.direction === "under" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                     }`}
-                    disabled={bot.isRunning}
+                    disabled={bot.isRunning || bot.autoMode}
                   >Under</button>
                 </div>
               </div>
@@ -217,6 +231,53 @@ export function Over5Under5Panel({ apiToken }: Over5Under5PanelProps) {
 
         {/* Right: Live display */}
         <div className="lg:col-span-7 space-y-4">
+          {/* Auto Mode Scanner Display */}
+          {bot.autoMode && (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-widest text-amber-400 font-semibold flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Auto Scanner
+                </p>
+                {bot.autoActiveSymbol && (
+                  <span className="text-[10px] font-mono font-bold bg-green-500/20 text-green-400 px-2 py-0.5 rounded">
+                    Active: {VOLATILITY_SYMBOLS.find(s => s.value === bot.autoActiveSymbol)?.label}
+                  </span>
+                )}
+                {!bot.autoActiveSymbol && (
+                  <span className="text-[10px] font-mono text-muted-foreground">Scanning...</span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Over 5: 40.9%–45% &amp; Under 5: 45.9%–49.9%
+              </p>
+              {bot.autoMarketStats.length > 0 && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {bot.autoMarketStats.map((m) => (
+                    <div
+                      key={m.symbol}
+                      className={`flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono ${
+                        m.eligible ? "bg-green-500/10 border border-green-500/30" : "bg-muted/30"
+                      }`}
+                    >
+                      <span className={m.eligible ? "text-green-400 font-bold" : "text-muted-foreground"}>
+                        {m.label}
+                      </span>
+                      <span className="flex gap-3">
+                        <span className={m.eligible ? "text-green-400" : "text-muted-foreground"}>
+                          O: {m.overPct.toFixed(1)}%
+                        </span>
+                        <span className={m.eligible ? "text-green-400" : "text-muted-foreground"}>
+                          U: {m.underPct.toFixed(1)}%
+                        </span>
+                        {m.eligible && <span className="text-green-400">✓</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Virtual Mode Display */}
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between">
