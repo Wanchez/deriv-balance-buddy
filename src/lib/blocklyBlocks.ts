@@ -1,4 +1,4 @@
-import Blockly from "blockly";
+import * as Blockly from "blockly";
 
 /* ── colour palette (matches our design tokens roughly) ── */
 const C = {

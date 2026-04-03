@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import Blockly from "blockly";
+import * as Blockly from "blockly";
 import { TOOLBOX } from "@/lib/blocklyBlocks";
 import { Button } from "@/components/ui/button";
 import { Play, Square, Save, Upload, Trash2 } from "lucide-react";
