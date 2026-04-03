@@ -176,6 +176,10 @@ const Index = () => {
           <TabsContent value="over5under5" className="mt-4">
             <Over5Under5Panel apiToken={apiToken} />
           </TabsContent>
+
+          <TabsContent value="blockly" className="mt-4">
+            <BlocklyWorkspace isConnected={deriv.isConnected} />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
