@@ -11,7 +11,7 @@ import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { useDCirclesStream } from "@/hooks/useDCirclesStream";
 import { useMarketScanner } from "@/hooks/useMarketScanner";
 import { BOT_DEFINITIONS } from "@/lib/botStrategies";
-import { Bot } from "lucide-react";
+import { Bot, Blocks } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { BotType } from "@/lib/botStrategies";
 
