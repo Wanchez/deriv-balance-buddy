@@ -119,6 +119,9 @@ const Index = () => {
             <TabsTrigger value="over5under5" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               Over/Under 5
             </TabsTrigger>
+            <TabsTrigger value="blockly" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Blocks className="h-3.5 w-3.5 mr-1" /> Visual Builder
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="strategies" className="mt-4">
