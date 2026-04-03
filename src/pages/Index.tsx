@@ -67,7 +67,7 @@ const Index = () => {
           </div>
           {deriv.isConnected && (
             <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              {activeMainTab === "over5under5" ? "Over/Under 5" : BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
+              {activeMainTab === "blockly" ? "Visual Builder" : activeMainTab === "over5under5" ? "Over/Under 5" : BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
             </span>
           )}
         </div>
