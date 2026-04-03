@@ -6,6 +6,7 @@ import { TradeLogPanel } from "@/components/TradeLog";
 import { DCircles } from "@/components/DCircles";
 import { MarketScanner } from "@/components/MarketScanner";
 import { Over5Under5Panel } from "@/components/Over5Under5Panel";
+import { BlocklyWorkspace } from "@/components/BlocklyWorkspace";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { useDCirclesStream } from "@/hooks/useDCirclesStream";
 import { useMarketScanner } from "@/hooks/useMarketScanner";
