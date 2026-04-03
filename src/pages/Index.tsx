@@ -6,11 +6,12 @@ import { TradeLogPanel } from "@/components/TradeLog";
 import { DCircles } from "@/components/DCircles";
 import { MarketScanner } from "@/components/MarketScanner";
 import { Over5Under5Panel } from "@/components/Over5Under5Panel";
+import { BlocklyWorkspace } from "@/components/BlocklyWorkspace";
 import { useDerivWebSocket } from "@/hooks/useDerivWebSocket";
 import { useDCirclesStream } from "@/hooks/useDCirclesStream";
 import { useMarketScanner } from "@/hooks/useMarketScanner";
 import { BOT_DEFINITIONS } from "@/lib/botStrategies";
-import { Bot } from "lucide-react";
+import { Bot, Blocks } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { BotType } from "@/lib/botStrategies";
 
@@ -66,7 +67,7 @@ const Index = () => {
           </div>
           {deriv.isConnected && (
             <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              {activeMainTab === "over5under5" ? "Over/Under 5" : BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
+              {activeMainTab === "blockly" ? "Visual Builder" : activeMainTab === "over5under5" ? "Over/Under 5" : BOT_DEFINITIONS.find((b) => b.id === deriv.strategy.botType)?.name}
             </span>
           )}
         </div>
@@ -117,6 +118,9 @@ const Index = () => {
             </TabsTrigger>
             <TabsTrigger value="over5under5" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               Over/Under 5
+            </TabsTrigger>
+            <TabsTrigger value="blockly" className="flex-1 text-xs py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Blocks className="h-3.5 w-3.5 mr-1" /> Visual Builder
             </TabsTrigger>
           </TabsList>
 
@@ -171,6 +175,10 @@ const Index = () => {
 
           <TabsContent value="over5under5" className="mt-4">
             <Over5Under5Panel apiToken={apiToken} />
+          </TabsContent>
+
+          <TabsContent value="blockly" className="mt-4">
+            <BlocklyWorkspace isConnected={deriv.isConnected} />
           </TabsContent>
         </Tabs>
       </main>
